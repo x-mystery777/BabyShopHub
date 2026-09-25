@@ -1,10 +1,61 @@
-# babyshophub
+# BabyShopHub 🍼
 
-A new Flutter project.
+BabyShopHub is a mobile e-commerce application designed to provide parents and caregivers with a convenient platform for purchasing infant and baby products.
 
-## Getting Started
+## Project Overview
 
-This project is a starting point for a Flutter application.
+The application allows users to:
+
+- Register and authenticate
+- Browse baby products
+- Search and filter products
+- View product details
+- Add products to a shopping cart
+- Checkout and make dummy payments
+- Track orders
+- Review and rate products
+- Manage profiles and delivery addresses
+- Contact customer support
+
+Administrators can:
+
+- Manage products
+- Manage inventory
+- Manage users
+- Manage orders
+- Update order statuses
+- Manage customer support requests
+
+## Technology Stack
+
+### Mobile Application
+- Flutter
+- Dart
+
+### Backend
+- Java
+- Spring Boot
+- REST API
+
+### Database
+- MySQL
+
+## Project Structure
+
+```text
+BabyShopHub/
+├── android/
+├── ios/
+├── lib/
+├── test/
+├── backend/
+├── database/
+├── docs/
+├── screenshots/
+├── pubspec.yaml
+├── README.md
+└── .gitignore
+```
 
 A few resources to get you started if this is your first Flutter project:
 
