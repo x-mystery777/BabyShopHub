@@ -19,7 +19,8 @@ public class UserController {
     @GetMapping("/profile")
     public ResponseEntity<User> getProfile(@AuthenticationPrincipal UserDetails userDetails) {
         User user = userService.getUserProfile(userDetails.getUsername());
-        // Hide password before returning response
+
+        
         user.setPassword(null);
         return ResponseEntity.ok(user);
     }
