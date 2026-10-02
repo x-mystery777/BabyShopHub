@@ -29,24 +29,32 @@ Administrators can:
 ## Technology Stack
 
 ### Mobile Application
+
 - Flutter
 - Dart
 
 ### Backend
+
 - Java
 - Spring Boot
 - REST API
 
 ### Database
+
 - MySQL
 
 ## Project Structure
 
 ```text
 BabyShopHub/
-├── mobile/
+├── android/
+├── ios/
+├── lib/
+├── test/
 ├── backend/
+├── database/
 ├── docs/
 ├── screenshots/
+├── pubspec.yaml
 ├── README.md
 └── .gitignore
