@@ -60,6 +60,9 @@ flutter:
   assets:
     - assets/images/brand_logo.png
     - assets/images/splash_illustration.png
+    - assets/images/onboarding_need.jpg
+    - assets/images/onboarding_quality.jpg
+    - assets/images/onboarding_confidence.jpg
 
   # To add assets to your application, add an assets section, like this:
   # assets:
