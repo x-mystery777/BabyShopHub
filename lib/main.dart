@@ -40,8 +40,7 @@ class BabyShopHubApp extends StatelessWidget {
   }
 }
 
-/// Plays the three Figma intro/loading panels, then remains on the welcome
-/// splash. The main shopping experience will be added in a later milestone.
+/// Plays the three splash stages, then transitions into onboarding.
 class StartupSequence extends StatefulWidget {
   const StartupSequence({super.key});
 
@@ -57,6 +56,7 @@ class _StartupSequenceState extends State<StartupSequence> {
   ];
 
   int _page = 0;
+  bool _showAccountAccess = false;
   Timer? _timer;
 
   @override
@@ -81,6 +81,20 @@ class _StartupSequenceState extends State<StartupSequence> {
   }
 
   Widget _pageForIndex() {
+    if (_page >= _durations.length) {
+      if (_showAccountAccess) {
+        return ShopperAccountFlow(
+          key: const ValueKey('shopper-account-access'),
+          onBackToOnboarding: () =>
+              setState(() => _showAccountAccess = false),
+        );
+      }
+      return OnboardingFlow(
+        key: const ValueKey('onboarding'),
+        onComplete: () => setState(() => _showAccountAccess = true),
+      );
+    }
+
     return switch (_page) {
       0 => const LogoIntroPage(key: ValueKey('logo')),
       1 => const LoadingPage(
@@ -91,7 +105,7 @@ class _StartupSequenceState extends State<StartupSequence> {
         key: ValueKey('loading-ring'),
         indicator: _TwoToneRing(),
       ),
-      _ => const WelcomeSplashPage(key: ValueKey('welcome')),
+      _ => const SizedBox.shrink(),
     };
   }
 
@@ -107,7 +121,11 @@ class _StartupSequenceState extends State<StartupSequence> {
       child: Scaffold(
         body: Stack(
           children: [
-            const Positioned.fill(child: CustomPaint(painter: _CloudPainter())),
+            Positioned.fill(
+              child: _page >= _durations.length
+                  ? const ColoredBox(color: Colors.white)
+                  : const CustomPaint(painter: _CloudPainter()),
+            ),
             SafeArea(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 520),
@@ -371,75 +389,800 @@ class _RingPainter extends CustomPainter {
   bool shouldRepaint(covariant _RingPainter oldDelegate) => false;
 }
 
-class WelcomeSplashPage extends StatelessWidget {
-  const WelcomeSplashPage({super.key});
+class OnboardingFlow extends StatefulWidget {
+  const OnboardingFlow({required this.onComplete, super.key});
+
+  final VoidCallback onComplete;
+
+  @override
+  State<OnboardingFlow> createState() => _OnboardingFlowState();
+}
+
+class _OnboardingFlowState extends State<OnboardingFlow> {
+  static const _slides = <_OnboardingSlideData>[
+    _OnboardingSlideData(
+      title: 'Everything Your\nBaby Needs',
+      description:
+          'From diapers to toys, find the best\nfor your little one, all in one place.',
+      imagePath: 'assets/images/onboarding_need.jpg',
+      imageDescription: 'Teddy bear and colorful baby toys',
+    ),
+    _OnboardingSlideData(
+      title: 'Quality & Trusted\nProducts',
+      description:
+          'We bring you safe, high-quality\nand trusted products from\nreliable brands.',
+      imagePath: 'assets/images/onboarding_quality.jpg',
+      imageDescription: 'Baby bottle and organized baby products',
+    ),
+    _OnboardingSlideData(
+      title: 'Shop with Confidence',
+      description:
+          'Secure payments, fast delivery\nand dedicated support for\nyou and your baby.',
+      imagePath: 'assets/images/onboarding_confidence.jpg',
+      imageDescription: 'Baby crib with a hanging mobile',
+    ),
+  ];
+
+  final _controller = PageController();
+  int _currentPage = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _next() {
+    if (_currentPage == _slides.length - 1) {
+      widget.onComplete();
+      return;
+    }
+    _controller.nextPage(
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: ColoredBox(
+        color: Colors.white,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 14),
+            child: Column(
+              children: [
+                Expanded(
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: _slides.length,
+                    onPageChanged: (page) =>
+                        setState(() => _currentPage = page),
+                    itemBuilder: (context, index) =>
+                        _OnboardingSlide(data: _slides[index]),
+                  ),
+                ),
+                _PageIndicator(
+                  count: _slides.length,
+                  selectedIndex: _currentPage,
+                ),
+                const SizedBox(height: 24),
+                _OnboardingButton(
+                  label: _currentPage == _slides.length - 1
+                      ? 'Get Started'
+                      : 'Next',
+                  isLast: _currentPage == _slides.length - 1,
+                  onPressed: _next,
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OnboardingSlideData {
+  const _OnboardingSlideData({
+    required this.title,
+    required this.description,
+    required this.imagePath,
+    required this.imageDescription,
+  });
+
+  final String title;
+  final String description;
+  final String imagePath;
+  final String imageDescription;
+}
+
+class _OnboardingSlide extends StatelessWidget {
+  const _OnboardingSlide({required this.data});
+
+  final _OnboardingSlideData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          flex: 6,
+          child: Center(child: _OnboardingArtwork(data: data)),
+        ),
+        Text(
+          data.title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Color(0xFF0751A5),
+            fontSize: 23,
+            height: 1.15,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          data.description,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Color(0xFF6383A8),
+            fontSize: 14,
+            height: 1.45,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const Spacer(flex: 2),
+      ],
+    );
+  }
+}
+
+class _OnboardingArtwork extends StatelessWidget {
+  const _OnboardingArtwork({required this.data});
+
+  final _OnboardingSlideData data;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final illustrationHeight = math.min(
-          constraints.maxHeight * 0.34,
-          constraints.maxWidth * 0.66,
+        final size = math
+            .min(constraints.maxWidth * 0.82, constraints.maxHeight * 0.78)
+            .toDouble();
+        return SizedBox.square(
+          dimension: size,
+          child: Image.asset(
+            data.imagePath,
+            fit: BoxFit.contain,
+            semanticLabel: data.imageDescription,
+          ),
         );
+      },
+    );
+  }
+}
 
-        return SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 22),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+class _PageIndicator extends StatelessWidget {
+  const _PageIndicator({required this.count, required this.selectedIndex});
+
+  final int count;
+  final int selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var index = 0; index < count; index++) ...[
+          if (index > 0) const SizedBox(width: 7),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            width: index == selectedIndex ? 8 : 6,
+            height: index == selectedIndex ? 8 : 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: index == selectedIndex
+                  ? const Color(0xFF218CF2)
+                  : const Color(0xFFD8E6F3),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _OnboardingButton extends StatelessWidget {
+  const _OnboardingButton({
+    required this.label,
+    required this.isLast,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool isLast;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = isLast
+        ? const [Color(0xFFFF8DAA), Color(0xFFFF6D93)]
+        : const [Color(0xFF39A5FF), Color(0xFF218CF2)];
+
+    return Container(
+      width: double.infinity,
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: colors),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: colors.last.withValues(alpha: 0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(28),
+          child: Center(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shopper sign-in and registration screens. Authentication is intentionally
+/// not connected until the backend contract is ready.
+class ShopperAccountFlow extends StatefulWidget {
+  const ShopperAccountFlow({
+    required this.onBackToOnboarding,
+    super.key,
+  });
+
+  final VoidCallback onBackToOnboarding;
+
+  @override
+  State<ShopperAccountFlow> createState() => _ShopperAccountFlowState();
+}
+
+class _ShopperAccountFlowState extends State<ShopperAccountFlow> {
+  bool _showRegistration = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: ColoredBox(
+        color: Colors.white,
+        child: SafeArea(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: _showRegistration
+                ? _ShopperRegistrationPage(
+                    key: const ValueKey('shopper-registration'),
+                    onBack: () => setState(() => _showRegistration = false),
+                    onSignIn: () => setState(() => _showRegistration = false),
+                  )
+                : _ShopperSignInPage(
+                    key: const ValueKey('shopper-sign-in'),
+                    onBack: widget.onBackToOnboarding,
+                    onCreateAccount: () =>
+                        setState(() => _showRegistration = true),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShopperSignInPage extends StatefulWidget {
+  const _ShopperSignInPage({
+    required this.onBack,
+    required this.onCreateAccount,
+    super.key,
+  });
+
+  final VoidCallback onBack;
+  final VoidCallback onCreateAccount;
+
+  @override
+  State<_ShopperSignInPage> createState() => _ShopperSignInPageState();
+}
+
+class _ShopperSignInPageState extends State<_ShopperSignInPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _hidePassword = true;
+  bool _rememberMe = false;
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSubmitting = true);
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    _showAuthUnavailable(context, 'Sign-in', formValidated: true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _AccountPageLayout(
+      key: const ValueKey('sign-in-layout'),
+      title: 'Welcome Back',
+      subtitle: 'Log in to continue shopping\nfor your little one.',
+      onBack: widget.onBack,
+      children: [
+        Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                decoration: _accountInputDecoration(
+                  'Email Address',
+                  Icons.mail_outline_rounded,
+                ),
+                validator: _validateEmail,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: _hidePassword,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                onFieldSubmitted: (_) => _submit(),
+                decoration: _accountInputDecoration(
+                  'Password',
+                  Icons.lock_outline_rounded,
+                  suffix: IconButton(
+                    tooltip: _hidePassword ? 'Show password' : 'Hide password',
+                    onPressed: () =>
+                        setState(() => _hidePassword = !_hidePassword),
+                    icon: Icon(
+                      _hidePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                  ),
+                ),
+                validator: (value) => value == null || value.isEmpty
+                    ? 'Enter your password.'
+                    : null,
+              ),
+              const SizedBox(height: 6),
+              Row(
                 children: [
-                  SizedBox(
-                    height: illustrationHeight,
-                    child: const _WigglingIllustration(),
-                  ),
-                  const SizedBox(height: 14),
-                  const _BrandName(),
-                  const SizedBox(height: 3),
-                  const Text(
-                    'Gentle Essentials for Little Ones',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: _ink,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.1,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: 205,
-                    height: 46,
-                    child: FilledButton(
-                      // The shopping screen is the next project milestone.
-                      onPressed: null,
-                      style: FilledButton.styleFrom(
-                        disabledBackgroundColor: const Color(0xFFFFC5C9),
-                        disabledForegroundColor: _ink,
-                        shape: const StadiumBorder(),
-                      ),
-                      child: const Text(
-                        'Enter Boutique',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Checkbox.adaptive(
+                          value: _rememberMe,
+                          visualDensity: VisualDensity.compact,
+                          onChanged: (value) => setState(
+                            () => _rememberMe = value ?? false,
+                          ),
                         ),
-                      ),
+                        Flexible(
+                          child: InkWell(
+                            onTap: () => setState(
+                              () => _rememberMe = !_rememberMe,
+                            ),
+                            child: const Text(
+                              'Remember me',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  const Text(
-                    'Tap the items to make them shake!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: _ink,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
+                  TextButton(
+                    onPressed: () => _showAuthUnavailable(
+                      context,
+                      'Password recovery',
+                    ),
+                    child: const Text(
+                      'Forgot password?',
+                      style: TextStyle(fontSize: 12),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 6),
+              _AccountActionButton(
+                label: 'Log In',
+                isLoading: _isSubmitting,
+                onPressed: _submit,
+              ),
+            ],
+          ),
+        ),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const _OrContinueDivider(),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _SocialAccountButton(
+                    label: 'Google',
+                    leading: const Text(
+                      'G',
+                      style: TextStyle(
+                        color: Color(0xFF4285F4),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    onPressed: () =>
+                        _showAuthUnavailable(context, 'Google sign-in'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SocialAccountButton(
+                    label: 'Apple',
+                    leading: const Icon(Icons.phone_iphone_rounded, size: 19),
+                    onPressed: () =>
+                        _showAuthUnavailable(context, 'Apple sign-in'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        Center(
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text(
+                'Don’t have an account? ',
+                style: TextStyle(fontSize: 12, color: Color(0xFF71849A)),
+              ),
+              TextButton(
+                onPressed: widget.onCreateAccount,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Sign Up', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ShopperRegistrationPage extends StatefulWidget {
+  const _ShopperRegistrationPage({
+    required this.onBack,
+    required this.onSignIn,
+    super.key,
+  });
+
+  final VoidCallback onBack;
+  final VoidCallback onSignIn;
+
+  @override
+  State<_ShopperRegistrationPage> createState() =>
+      _ShopperRegistrationPageState();
+}
+
+class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmationController = TextEditingController();
+  bool _hidePassword = true;
+  bool _hideConfirmation = true;
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSubmitting = true);
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    _showAuthUnavailable(context, 'Account creation', formValidated: true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _AccountPageLayout(
+      key: const ValueKey('registration-layout'),
+      title: 'Create Account',
+      subtitle: 'Join us and make shopping for your baby easier.',
+      onBack: widget.onBack,
+      children: [
+        Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _nameController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.name],
+                decoration: _accountInputDecoration(
+                  'Full Name',
+                  Icons.person_outline_rounded,
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Enter your name.'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                decoration: _accountInputDecoration(
+                  'Email Address',
+                  Icons.mail_outline_rounded,
+                ),
+                validator: _validateEmail,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: _hidePassword,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.newPassword],
+                decoration: _accountInputDecoration(
+                  'Password',
+                  Icons.lock_outline_rounded,
+                  suffix: IconButton(
+                    tooltip: _hidePassword ? 'Show password' : 'Hide password',
+                    onPressed: () =>
+                        setState(() => _hidePassword = !_hidePassword),
+                    icon: Icon(
+                      _hidePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Enter a password.';
+                  }
+                  if (value.length < 8) {
+                    return 'Use at least 8 characters.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _confirmationController,
+                obscureText: _hideConfirmation,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.newPassword],
+                onFieldSubmitted: (_) => _submit(),
+                decoration: _accountInputDecoration(
+                  'Confirm Password',
+                  Icons.lock_outline_rounded,
+                  suffix: IconButton(
+                    tooltip: _hideConfirmation
+                        ? 'Show confirmation password'
+                        : 'Hide confirmation password',
+                    onPressed: () => setState(
+                      () => _hideConfirmation = !_hideConfirmation,
+                    ),
+                    icon: Icon(
+                      _hideConfirmation
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Confirm your password.';
+                  }
+                  if (value != _passwordController.text) {
+                    return 'Passwords do not match.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              _AccountActionButton(
+                label: 'Sign Up',
+                isLoading: _isSubmitting,
+                isPrimaryPink: true,
+                onPressed: _submit,
+              ),
+            ],
+          ),
+        ),
+        Center(
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text(
+                'Already have an account? ',
+                style: TextStyle(fontSize: 12, color: Color(0xFF71849A)),
+              ),
+              TextButton(
+                onPressed: widget.onSignIn,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Log In', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AccountPageLayout extends StatelessWidget {
+  const _AccountPageLayout({
+    required this.title,
+    required this.subtitle,
+    required this.onBack,
+    required this.children,
+    super.key,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onBack;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pageWidth = math.min(constraints.maxWidth, 440.0);
+        final horizontalInset = (pageWidth * 0.08).clamp(16.0, 32.0).toDouble();
+        final useCompactLayout =
+            constraints.maxWidth < 600 || constraints.maxHeight < 640;
+        final logoWidth = useCompactLayout
+            ? math.min(pageWidth * 0.46, constraints.maxHeight * 0.2)
+            : 124.0;
+        final headerHeight = useCompactLayout
+            ? logoWidth * 0.92
+            : 100.0;
+        final sectionGap = useCompactLayout
+            ? math.min(constraints.maxHeight * 0.035, 28.0)
+            : 0.0;
+        return Center(
+          child: SizedBox(
+            width: pageWidth,
+            height: constraints.maxHeight,
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalInset,
+                      6,
+                      horizontalInset,
+                      8,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: useCompactLayout
+                          ? MainAxisAlignment.start
+                          : MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: headerHeight,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: IconButton(
+                                  tooltip: 'Back',
+                                  onPressed: onBack,
+                                  icon: const Icon(Icons.arrow_back_rounded),
+                                ),
+                              ),
+                              _BrandLogo(width: logoWidth),
+                            ],
+                          ),
+                        ),
+                        if (useCompactLayout) SizedBox(height: sectionGap),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                color: Color(0xFF0751A5),
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              subtitle,
+                              style: const TextStyle(
+                                color: Color(0xFF6383A8),
+                                fontSize: 14,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (useCompactLayout) SizedBox(height: sectionGap),
+                        for (var index = 0; index < children.length; index++) ...[
+                          if (useCompactLayout && index > 0)
+                            SizedBox(height: sectionGap),
+                          children[index],
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -449,103 +1192,163 @@ class WelcomeSplashPage extends StatelessWidget {
   }
 }
 
-class _BrandName extends StatelessWidget {
-  const _BrandName();
-
-  @override
-  Widget build(BuildContext context) {
-    return Text.rich(
-      const TextSpan(
-        children: [
-          TextSpan(
-            text: 'BabyShop',
-            style: TextStyle(color: _ink),
-          ),
-          TextSpan(
-            text: 'Hub',
-            style: TextStyle(color: Color(0xFFE88791)),
-          ),
-        ],
-      ),
-      textAlign: TextAlign.center,
-      style: const TextStyle(
-        fontSize: 29,
-        height: 1.1,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.6,
-      ),
-    );
-  }
-}
-
-class _WigglingIllustration extends StatefulWidget {
-  const _WigglingIllustration();
-
-  @override
-  State<_WigglingIllustration> createState() => _WigglingIllustrationState();
-}
-
-class _WigglingIllustrationState extends State<_WigglingIllustration>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 560),
+InputDecoration _accountInputDecoration(
+  String hint,
+  IconData icon, {
+  Widget? suffix,
+}) {
+  return InputDecoration(
+    hintText: hint,
+    hintStyle: const TextStyle(color: Color(0xFF7890A8), fontSize: 14),
+    prefixIcon: Icon(icon, size: 20, color: const Color(0xFF7890A8)),
+    suffixIcon: suffix,
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Color(0xFFD6E3EF)),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Color(0xFFD6E3EF)),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Color(0xFF218CF2), width: 1.4),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Color(0xFFB3261E)),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Color(0xFFB3261E), width: 1.4),
+    ),
   );
-  late final Animation<double> _rotation = TweenSequence<double>([
-    TweenSequenceItem(
-      tween: Tween<double>(
-        begin: 0,
-        end: -0.035,
-      ).chain(CurveTween(curve: Curves.easeOut)),
-      weight: 1,
-    ),
-    TweenSequenceItem(
-      tween: Tween<double>(
-        begin: -0.035,
-        end: 0.03,
-      ).chain(CurveTween(curve: Curves.easeInOut)),
-      weight: 2,
-    ),
-    TweenSequenceItem(
-      tween: Tween<double>(
-        begin: 0.03,
-        end: -0.018,
-      ).chain(CurveTween(curve: Curves.easeInOut)),
-      weight: 2,
-    ),
-    TweenSequenceItem(
-      tween: Tween<double>(
-        begin: -0.018,
-        end: 0,
-      ).chain(CurveTween(curve: Curves.easeOut)),
-      weight: 1,
-    ),
-  ]).animate(_controller);
+}
 
-  void _shake() => _controller.forward(from: 0);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+String? _validateEmail(String? value) {
+  final email = value?.trim() ?? '';
+  if (email.isEmpty) return 'Enter your email address.';
+  if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+    return 'Enter a valid email address.';
   }
+  return null;
+}
+
+class _AccountActionButton extends StatelessWidget {
+  const _AccountActionButton({
+    required this.label,
+    required this.isLoading,
+    required this.onPressed,
+    this.isPrimaryPink = false,
+  });
+
+  final String label;
+  final bool isLoading;
+  final bool isPrimaryPink;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _shake,
-      child: AnimatedBuilder(
-        animation: _rotation,
-        builder: (context, child) =>
-            Transform.rotate(angle: _rotation.value, child: child),
-        child: Image.asset(
-          'assets/images/splash_illustration.png',
-          fit: BoxFit.contain,
-          semanticLabel: 'Baby bottle and teddy bear',
+    final color = isPrimaryPink
+        ? const Color(0xFFFF6D93)
+        : const Color(0xFF218CF2);
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: FilledButton(
+        onPressed: isLoading ? null : onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: color,
+          disabledBackgroundColor: color.withValues(alpha: 0.7),
+          foregroundColor: Colors.white,
+          shape: const StadiumBorder(),
         ),
+        child: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
       ),
     );
   }
+}
+
+class _SocialAccountButton extends StatelessWidget {
+  const _SocialAccountButton({
+    required this.label,
+    required this.leading,
+    required this.onPressed,
+  });
+
+  final String label;
+  final Widget leading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: leading,
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF384D62),
+        side: const BorderSide(color: Color(0xFFD6E3EF)),
+        minimumSize: const Size.fromHeight(48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+}
+
+class _OrContinueDivider extends StatelessWidget {
+  const _OrContinueDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(child: Divider(color: Color(0xFFE4EBF2))),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            'Or continue with',
+            style: TextStyle(color: Colors.blueGrey.shade400, fontSize: 11),
+          ),
+        ),
+        const Expanded(child: Divider(color: Color(0xFFE4EBF2))),
+      ],
+    );
+  }
+}
+
+void _showAuthUnavailable(
+  BuildContext context,
+  String action, {
+  bool formValidated = false,
+}) {
+  final message = formValidated
+      ? 'Form is valid, but $action is not connected yet. Your information was not sent.'
+      : '$action is not connected yet. Your information was not sent.';
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
 }
 
 class _CloudPainter extends CustomPainter {
