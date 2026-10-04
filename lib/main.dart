@@ -1,16 +1,22 @@
 import 'dart:async';
 import 'dart:math' as math;
-
+import 'screens/main_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'core/api_client.dart';
+import 'core/app_theme.dart';
+import 'core/format.dart';
+import 'screens/auth_extra.dart';
+import 'services/shop_api.dart';
+import 'state/session.dart';
 
 const _sky = Color(0xFFC6E7F4);
 const _ink = Color(0xFF594F4B);
-const _pink = Color(0xFFF5A6AE);
 const _blue = Color(0xFF9ABDE4);
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Session.instance.restore();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -30,12 +36,15 @@ class BabyShopHubApp extends StatelessWidget {
     return MaterialApp(
       title: 'BabyShopHub',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: _sky,
-        colorScheme: ColorScheme.fromSeed(seedColor: _pink),
+            navigatorKey: Session.navigatorKey,
+      theme: buildAppTheme(),
+      // Logged in -> the shop. Logged out -> splash, onboarding, sign-in.
+      home: ListenableBuilder(
+        listenable: Session.instance,
+        builder: (context, _) => Session.instance.isLoggedIn
+            ? const MainShell()
+            : const StartupSequence(),
       ),
-      home: const StartupSequence(),
     );
   }
 }
@@ -116,9 +125,10 @@ class _StartupSequenceState extends State<StartupSequence> {
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.dark,
         systemNavigationBarColor: _sky,
-        systemNavigationBarIconBrightness: Brightness.dark,
+                systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
+        backgroundColor: _sky,
         body: Stack(
           children: [
             Positioned.fill(
@@ -737,10 +747,35 @@ class _ShopperSignInPageState extends State<_ShopperSignInPage> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    _showAuthUnavailable(context, 'Sign-in', formValidated: true);
+        final email = _emailController.text.trim();
+    try {
+      await Session.instance.login(
+        email,
+        _passwordController.text,
+        remember: _rememberMe,
+      );
+      // Success: the app root swaps to the shop by itself.
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      final notVerified = e.message.toLowerCase().contains('not verified');
+      _showAuthError(
+        context,
+        e.message,
+        actionLabel: notVerified ? 'Verify' : null,
+                onAction: notVerified
+            ? () async {
+                final navigator = Navigator.of(context);
+                try {
+                  await ShopApi.resendCode(email);
+                } catch (_) {}
+                navigator.push(MaterialPageRoute<bool>(
+                  builder: (_) => VerifyOtpScreen(email: email),
+                ));
+              }
+            : null,
+      );
+    }
   }
 
   @override
@@ -819,9 +854,12 @@ class _ShopperSignInPageState extends State<_ShopperSignInPage> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => _showAuthUnavailable(
-                      context,
-                      'Password recovery',
+                                        onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ForgotPasswordScreen(
+                          initialEmail: _emailController.text.trim(),
+                        ),
+                      ),
                     ),
                     child: const Text(
                       'Forgot password?',
@@ -921,6 +959,8 @@ class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmationController = TextEditingController();
+  final _phoneController = TextEditingController();
+  DateTime? _dob;
   bool _hidePassword = true;
   bool _hideConfirmation = true;
   bool _isSubmitting = false;
@@ -931,16 +971,52 @@ class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmationController.dispose();
+    _phoneController.dispose();
     super.dispose();
+  }
+
+    Future<void> _pickDob() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dob ?? DateTime(2000),
+      firstDate: DateTime(1920),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _dob = picked);
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_dob == null) {
+      _showAuthError(context, 'Choose your date of birth.');
+      return;
+    }
     setState(() => _isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    _showAuthUnavailable(context, 'Account creation', formValidated: true);
+    final email = _emailController.text.trim();
+    try {
+      await ShopApi.register(
+        name: _nameController.text.trim(),
+        email: email,
+        password: _passwordController.text,
+        dob: _dob!,
+        phone: _phoneController.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      final verified = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => VerifyOtpScreen(email: email)),
+      );
+      if (!mounted) return;
+      if (verified == true) {
+        _showAuthError(context, 'Account verified. Please log in.',
+            isError: false);
+        widget.onSignIn();
+      }
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      _showAuthError(context, e.message);
+    }
   }
 
   @override
@@ -981,6 +1057,40 @@ class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
                 validator: _validateEmail,
               ),
               const SizedBox(height: 10),
+                            TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                decoration: _accountInputDecoration(
+                  'Phone Number',
+                  Icons.phone_outlined,
+                ),
+                validator: (value) => value == null || value.trim().length < 7
+                    ? 'Enter your phone number.'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              InkWell(
+                onTap: _pickDob,
+                borderRadius: BorderRadius.circular(14),
+                child: InputDecorator(
+                  decoration: _accountInputDecoration(
+                    '',
+                    Icons.cake_outlined,
+                  ),
+                  child: Text(
+                    _dob == null ? 'Date of Birth' : formatDate(_dob),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _dob == null
+                          ? const Color(0xFF7890A8)
+                          : const Color(0xFF384D62),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
               TextFormField(
                 controller: _passwordController,
                 obscureText: _hidePassword,
@@ -1000,15 +1110,7 @@ class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
                     ),
                   ),
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Enter a password.';
-                  }
-                  if (value.length < 8) {
-                    return 'Use at least 8 characters.';
-                  }
-                  return null;
-                },
+                 validator: validateStrongPassword,
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -1332,6 +1434,31 @@ class _OrContinueDivider extends StatelessWidget {
       ],
     );
   }
+}
+
+void _showAuthError(
+  BuildContext context,
+  String message, {
+  bool isError = true,
+  String? actionLabel,
+  VoidCallback? onAction,
+}) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? const Color(0xFFB3261E) : const Color(0xFF0751A5),
+        behavior: SnackBarBehavior.floating,
+        action: actionLabel == null
+            ? null
+            : SnackBarAction(
+                label: actionLabel,
+                textColor: Colors.white,
+                onPressed: onAction ?? () {},
+              ),
+      ),
+    );
 }
 
 void _showAuthUnavailable(
