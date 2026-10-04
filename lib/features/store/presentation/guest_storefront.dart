@@ -136,45 +136,113 @@ class _GuestStorefrontState extends State<GuestStorefront> {
   void _requireAccount(String message) {
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(
-          Icons.lock_outline_rounded,
-          color: Color(0xFF218CF2),
-          size: 32,
-        ),
-        title: const Text('Join BabyShopHub'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('$message Sign up or log in to continue.'),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  widget.onRequireAccount(true);
-                },
-                child: const Text('Sign Up'),
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final media = MediaQuery.sizeOf(dialogContext);
+        final compact = media.width < 380 || media.height < 600;
+        final horizontalInset = switch (media.width) {
+          < 360 => 16.0,
+          < 600 => 22.0,
+          _ => 32.0,
+        };
+        final contentPadding = compact ? 18.0 : 24.0;
+
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: horizontalInset,
+            vertical: 24,
+          ),
+          backgroundColor: const Color(0xFFF9E7E8),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(compact ? 24 : 30),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 420,
+              maxHeight: media.height * 0.82,
+            ),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: contentPadding,
+                vertical: compact ? 18 : 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.lock_outline_rounded,
+                    color: const Color(0xFF218CF2),
+                    size: compact ? 28 : 32,
+                  ),
+                  SizedBox(height: compact ? 8 : 10),
+                  Text(
+                    'Join BabyShopHub',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: const Color(0xFF352E30),
+                      fontSize: compact ? 21 : 22,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: compact ? 8 : 9),
+                  Text(
+                    '$message Sign up or log in to continue.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: const Color(0xFF554B4D),
+                      fontSize: compact ? 13 : 14,
+                      height: 1.4,
+                    ),
+                  ),
+                  SizedBox(height: compact ? 13 : 15),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: FilledButton(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        widget.onRequireAccount(true);
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF934B58),
+                        foregroundColor: Colors.white,
+                        shape: const StadiumBorder(),
+                      ),
+                      child: const Text('Sign Up'),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        widget.onRequireAccount(false);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF934B58),
+                        side: const BorderSide(color: Color(0xFF9F8589)),
+                        shape: const StadiumBorder(),
+                      ),
+                      child: const Text('Login'),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF934B58),
+                      minimumSize: const Size.fromHeight(40),
+                    ),
+                    child: const Text('Keep browsing'),
+                  ),
+                ],
               ),
             ),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  widget.onRequireAccount(false);
-                },
-                child: const Text('Login'),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Keep browsing'),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
