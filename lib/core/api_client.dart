@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_config.dart';
+import 'http_factory.dart';
 import 'mock_backend.dart';
 
 class ApiException implements Exception {
@@ -16,7 +18,7 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-/// One place that talks HTTP: adds the JWT, turns errors into readable text.
+/// One place that talks HTTP: adds the login, turns errors into readable text.
 class ApiClient {
   ApiClient._();
   static final instance = ApiClient._();
@@ -24,11 +26,17 @@ class ApiClient {
   static const _tokenKey = 'auth_token';
   static const _timeout = Duration(seconds: 15);
 
+  final http.Client _client = createClient();
+
+  /// Mock mode: a fake JWT. Real backend: the JSESSIONID session cookie.
   String? _token;
   String? get token => _token;
 
-  /// Called when the server rejects our token (expired / invalid).
+  /// Called when the server rejects our login (expired / invalid).
   void Function()? onUnauthorized;
+
+  /// True while Session probes for the admin role (a 403 there is expected).
+  bool suppressExpiry = false;
 
   Future<void> loadToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -45,11 +53,21 @@ class ApiClient {
     }
   }
 
-  Map<String, String> _headers({bool json = true}) => {
-        'Accept': 'application/json',
-        if (json) 'Content-Type': 'application/json',
-        if (_token != null) 'Authorization': 'Bearer $_token',
-      };
+  Map<String, String> _headers({bool json = true}) {
+    final h = <String, String>{
+      'Accept': 'application/json',
+      if (json) 'Content-Type': 'application/json',
+    };
+    if (_token != null) {
+      if (useMock) {
+        h['Authorization'] = 'Bearer $_token';
+      } else if (!kIsWeb) {
+        h['Cookie'] = _token!; // phones send the saved session cookie
+      }
+      // In a browser the cookie is sent automatically.
+    }
+    return h;
+  }
 
   Uri _uri(String path, [Map<String, String>? query]) =>
       Uri.parse('$apiBaseUrl$path')
@@ -59,30 +77,30 @@ class ApiClient {
     if (useMock) {
       return MockBackend.instance.handle('GET', path, query: query);
     }
-    return _send(() => http.get(_uri(path, query), headers: _headers()));
+    return _send(() => _client.get(_uri(path, query), headers: _headers()));
   }
 
   Future<dynamic> post(String path, [Object? body]) {
     if (useMock) return MockBackend.instance.handle('POST', path, body: body);
-    return _send(() => http.post(_uri(path),
+    return _send(() => _client.post(_uri(path),
         headers: _headers(), body: body == null ? null : jsonEncode(body)));
   }
 
   Future<dynamic> put(String path, Object body) {
     if (useMock) return MockBackend.instance.handle('PUT', path, body: body);
-    return _send(
-        () => http.put(_uri(path), headers: _headers(), body: jsonEncode(body)));
+    return _send(() =>
+        _client.put(_uri(path), headers: _headers(), body: jsonEncode(body)));
   }
 
   Future<dynamic> patch(String path, Object body) {
     if (useMock) return MockBackend.instance.handle('PATCH', path, body: body);
     return _send(() =>
-        http.patch(_uri(path), headers: _headers(), body: jsonEncode(body)));
+        _client.patch(_uri(path), headers: _headers(), body: jsonEncode(body)));
   }
 
   Future<dynamic> delete(String path) {
     if (useMock) return MockBackend.instance.handle('DELETE', path);
-    return _send(() => http.delete(_uri(path), headers: _headers()));
+    return _send(() => _client.delete(_uri(path), headers: _headers()));
   }
 
   /// Admin "create product" expects multipart: a JSON part named `product`
@@ -109,8 +127,32 @@ class ApiClient {
           filename: '$partName.json',
           contentType: MediaType('application', 'json'),
         ));
-      return http.Response.fromStream(await request.send());
+      return http.Response.fromStream(await _client.send(request));
     });
+  }
+
+  /// Real backend login: it answers 204 and sets a JSESSIONID cookie.
+  Future<String> loginSession(String path, Object body) async {
+    final http.Response res;
+    try {
+      res = await _client
+          .post(_uri(path), headers: _headers(), body: jsonEncode(body))
+          .timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException('The server took too long to respond. Try again.');
+    } catch (_) {
+      throw ApiException(
+          "Can't reach the server. Check your connection and that the backend is running.");
+    }
+    _handle(res); // throws a readable error when the login failed
+    if (kIsWeb) return 'browser-session'; // the browser keeps the cookie
+    final cookie = RegExp(r'JSESSIONID=[^;,\s]+')
+        .firstMatch(res.headers['set-cookie'] ?? '')
+        ?.group(0);
+    if (cookie == null) {
+      throw ApiException('Login worked but the server sent no session.');
+    }
+    return cookie;
   }
 
   Future<dynamic> _send(Future<http.Response> Function() call) async {
@@ -149,7 +191,9 @@ class ApiClient {
         message = body;
       }
     }
-    if (res.statusCode == 401 && _token != null) {
+    final expired = res.statusCode == 401 ||
+        (res.statusCode == 403 && !useMock && !suppressExpiry);
+    if (expired && _token != null) {
       onUnauthorized?.call();
       message = 'Your session expired. Please log in again.';
     } else if (message.isEmpty) {
