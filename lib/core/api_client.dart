@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
@@ -103,13 +104,15 @@ class ApiClient {
     return _send(() => _client.delete(_uri(path), headers: _headers()));
   }
 
-  /// Admin "create product" expects multipart: a JSON part named `product`
-  /// plus plain form fields.
+  /// Admin "create product": a JSON part named `product`, plain form fields
+  /// and an optional picture.
   Future<dynamic> postMultipart(
     String path, {
     required Map<String, String> fields,
     required String partName,
     required Map<String, dynamic> partJson,
+    Uint8List? fileBytes,
+    String? fileName,
   }) {
     if (useMock) {
       return MockBackend.instance.handle('POST', path, body: {
@@ -127,8 +130,33 @@ class ApiClient {
           filename: '$partName.json',
           contentType: MediaType('application', 'json'),
         ));
+      if (fileBytes != null) {
+        request.files.add(_imagePart(fileBytes, fileName));
+      }
       return http.Response.fromStream(await _client.send(request));
     });
+  }
+
+  /// Uploads one picture, e.g. to replace a product's image.
+  Future<dynamic> uploadFile(String path,
+      {required Uint8List bytes, required String fileName}) {
+    if (useMock) return Future.value(null);
+    return _send(() async {
+      final request = http.MultipartRequest('POST', _uri(path))
+        ..headers.addAll(_headers(json: false))
+        ..files.add(_imagePart(bytes, fileName));
+      return http.Response.fromStream(await _client.send(request));
+    });
+  }
+
+  http.MultipartFile _imagePart(Uint8List bytes, String? name) {
+    final isPng = bytes.length > 3 && bytes[0] == 0x89 && bytes[1] == 0x50;
+    return http.MultipartFile.fromBytes(
+      'image',
+      bytes,
+      filename: name ?? (isPng ? 'image.png' : 'image.jpg'),
+      contentType: MediaType('image', isPng ? 'png' : 'jpeg'),
+    );
   }
 
   /// Real backend login: it answers 204 and sets a JSESSIONID cookie.

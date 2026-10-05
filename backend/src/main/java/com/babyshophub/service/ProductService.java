@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.babyshophub.entity.Brand;
 import com.babyshophub.entity.Category;
@@ -122,6 +123,19 @@ public class ProductService {
         if (request.getDescription() != null) product.setDescription(request.getDescription());
         if (request.getPrice() != null) product.setPrice(request.getPrice());
         if (request.getStockQty() != null) product.setStockQty(request.getStockQty());
+        return productRepository.save(product);
+    }
+
+        @Transactional
+    public Product replaceImage(Long id, MultipartFile file) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+        String url = saveImageLocally(file);
+        if (url == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose an image");
+        }
+        product.getImageUrls().clear();
+        product.getImageUrls().add(url);
         return productRepository.save(product);
     }
 

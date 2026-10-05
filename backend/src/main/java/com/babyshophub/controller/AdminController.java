@@ -84,6 +84,14 @@ public class AdminController {
         return ResponseEntity.ok(ProductResponse.from(productService.updateProduct(id, request)));
     }
 
+        // Admin: Replace a product's picture
+    @PostMapping(value = "/products/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ProductResponse> replaceProductImage(
+            @PathVariable Long id,
+            @RequestPart("image") MultipartFile imageFile) {
+        return ResponseEntity.ok(ProductResponse.from(productService.replaceImage(id, imageFile)));
+    }
+
     @DeleteMapping("/products/{id}")
     public ResponseEntity<Void> deactivateProduct(@PathVariable Long id) {
         productService.deactivateProduct(id); return ResponseEntity.noContent().build();
