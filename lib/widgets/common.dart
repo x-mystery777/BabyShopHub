@@ -449,7 +449,9 @@ class AsyncView<T> extends StatefulWidget {
 class _AsyncViewState<T> extends State<AsyncView<T>> {
   late Future<T> _future = widget.load();
 
-  void _reload() => setState(() => _future = widget.load());
+  void _reload() => setState(() {
+        _future = widget.load();
+      });
 
   @override
   Widget build(BuildContext context) {

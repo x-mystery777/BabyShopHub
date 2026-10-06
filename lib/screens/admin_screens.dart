@@ -5,6 +5,9 @@ import '../core/format.dart';
 import '../models/models.dart';
 import '../services/shop_api.dart';
 import '../widgets/common.dart';
+import 'dart:typed_data';
+
+import 'package:image_picker/image_picker.dart';
 
 /// Admin entry point (shown on Profile only for ROLE_ADMIN accounts).
 class AdminDashboardScreen extends StatefulWidget {
@@ -328,6 +331,29 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   late int? _brandId = widget.product?.brandId;
   late final Future<(List<Category>, List<Brand>)> _lookups =
       (ShopApi.categories(), ShopApi.brands()).wait;
+        Uint8List? _pickedBytes;
+  String? _pickedName;
+
+  Future<void> _pickImage() async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _pickedBytes = bytes;
+        _pickedName = file.name;
+      });
+    } catch (e) {
+      if (mounted) {
+        showMessage(context, 'Could not open the picture: $e', error: true);
+      }
+    }
+  }
   bool _saving = false;
 
   @override
@@ -348,7 +374,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     try {
       final price = double.parse(_price.text.trim());
       final stock = int.parse(_stock.text.trim());
-      if (widget.product == null) {
+            if (widget.product == null) {
         await ShopApi.createProduct(
           name: _name.text.trim(),
           description: _desc.text.trim(),
@@ -356,7 +382,8 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
           stock: stock,
           categoryId: _categoryId!,
           brandId: _brandId!,
-          imageUrl: _image.text,
+          imageBytes: _pickedBytes,
+          imageName: _pickedName,
         );
       } else {
         await ShopApi.updateProduct(
@@ -368,6 +395,10 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
           categoryId: _categoryId!,
           brandId: _brandId!,
         );
+        if (_pickedBytes != null) {
+          await ShopApi.replaceProductImage(
+              widget.product!.id, _pickedBytes!, _pickedName ?? 'image.jpg');
+        }
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -455,13 +486,39 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                   ],
                   onChanged: (v) => setState(() => _brandId = v),
                 ),
-                if (!editing) ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                      controller: _image,
-                      keyboardType: TextInputType.url,
-                      decoration: fieldDecoration('Image URL (optional)')),
-                ],
+                                const SizedBox(height: 16),
+                const Text('Product image',
+                    style: TextStyle(
+                        color: AppColors.navy, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    height: 180,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppColors.blueTint,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _pickedBytes != null
+                        ? Image.memory(_pickedBytes!, fit: BoxFit.cover)
+                        : (widget.product?.imageUrl != null
+                            ? ProductImage(widget.product!.imageUrl)
+                            : const Center(
+                                child: Icon(Icons.add_photo_alternate_outlined,
+                                    size: 48, color: AppColors.blue))),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _pickImage,
+                  icon: const Icon(Icons.image_outlined),
+                  label: Text(
+                      _pickedBytes != null || widget.product?.imageUrl != null
+                          ? 'Change image'
+                          : 'Choose image'),
+                ),
                 const SizedBox(height: 24),
                 PrimaryButton(
                     label: editing ? 'Save Changes' : 'Create Product',

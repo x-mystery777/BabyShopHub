@@ -22,9 +22,10 @@ class _CartScreenState extends State<CartScreen> {
   final _store = CartStore.instance;
 
   @override
-  void initState() {
+    void initState() {
     super.initState();
-    _store.refresh();
+    // Wait until the first frame is drawn before refreshing the cart.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _store.refresh());
   }
 
   Future<void> _run(Future<void> Function() action) async {

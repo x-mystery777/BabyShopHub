@@ -24,7 +24,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       (ShopApi.product(widget.productId), ShopApi.reviews(widget.productId))
           .wait;
 
-  void _reload() => setState(() => _future = _load());
+  void _reload() => setState(() {
+        _future = _load();
+      });
 
   Future<void> _add(Product p) async {
     setState(() => _adding = true);
