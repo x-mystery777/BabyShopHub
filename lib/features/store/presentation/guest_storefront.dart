@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/format.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../models/models.dart';
+import '../../../services/shop_api.dart';
 import 'category_tab.dart';
 
 class _StoreCategory {
@@ -11,6 +14,7 @@ class _StoreCategory {
   final Color color;
 }
 
+/// Presentation wrapper around a real [Product] so the card stays unchanged.
 class _StoreProduct {
   const _StoreProduct({
     required this.name,
@@ -20,10 +24,18 @@ class _StoreProduct {
     required this.color,
   });
 
+  factory _StoreProduct.from(Product p) => _StoreProduct(
+        name: p.name,
+        category: p.categoryName,
+        price: naira(p.price),
+        image: p.imageUrl,
+        color: const Color(0xFFE7F1F8),
+      );
+
   final String name;
   final String category;
   final String price;
-  final String image;
+  final String? image;
   final Color color;
 }
 
@@ -42,90 +54,52 @@ class GuestStorefront extends StatefulWidget {
 }
 
 class _GuestStorefrontState extends State<GuestStorefront> {
-  static const _categories = <_StoreCategory>[
-    _StoreCategory('Diapers', Icons.child_friendly_rounded, Color(0xFFE6DFFF)),
-    _StoreCategory('Baby Food', Icons.restaurant_rounded, Color(0xFFFFE8D7)),
-    _StoreCategory('Clothing', Icons.checkroom_rounded, Color(0xFFDDF2FF)),
-    _StoreCategory('Toys', Icons.toys_rounded, Color(0xFFFFE2DC)),
-    _StoreCategory('Bath', Icons.bathtub_outlined, Color(0xFFE4F3E7)),
-  ];
-
-  static const _products = <_StoreProduct>[
-    _StoreProduct(
-      name: 'Premium Soft Diapers',
-      category: 'Diapers',
-      price: '₦12,500',
-      image: 'assets/images/onboarding_quality.jpg',
-      color: Color(0xFFE7F1F8),
-    ),
-    _StoreProduct(
-      name: 'Organic Baby Food',
-      category: 'Baby Food',
-      price: '₦3,800',
-      image: 'assets/images/onboarding_need.jpg',
-      color: Color(0xFFFFF0D9),
-    ),
-    _StoreProduct(
-      name: 'Soft Cotton Onesie',
-      category: 'Clothing',
-      price: '₦9,200',
-      image: 'assets/images/onboarding_confidence.jpg',
-      color: Color(0xFFE9F3FB),
-    ),
-    _StoreProduct(
-      name: 'Cuddly Teddy Toy',
-      category: 'Toys',
-      price: '₦6,500',
-      image: 'assets/images/onboarding_need.jpg',
-      color: Color(0xFFFFECE8),
-    ),
-    _StoreProduct(
-      name: 'Gentle Baby Bottle',
-      category: 'Feeding',
-      price: 'NGN 4,200',
-      image: 'assets/images/onboarding_quality.jpg',
-      color: Color(0xFFEAF5FC),
-    ),
-    _StoreProduct(
-      name: 'Baby Skin Care Set',
-      category: 'Skincare',
-      price: 'NGN 7,600',
-      image: 'assets/images/onboarding_quality.jpg',
-      color: Color(0xFFFFF0E5),
-    ),
-    _StoreProduct(
-      name: 'Everyday Baby Accessories',
-      category: 'Accessories',
-      price: 'NGN 5,400',
-      image: 'assets/images/onboarding_need.jpg',
-      color: Color(0xFFF1EDFA),
-    ),
-    _StoreProduct(
-      name: 'Comfy Travel Stroller',
-      category: 'Strollers',
-      price: 'NGN 48,000',
-      image: 'assets/images/onboarding_confidence.jpg',
-      color: Color(0xFFE7F4F4),
-    ),
-    _StoreProduct(
-      name: 'Little One Essentials',
-      category: 'Others',
-      price: 'NGN 6,900',
-      image: 'assets/images/onboarding_need.jpg',
-      color: Color(0xFFFFEEF2),
-    ),
-    _StoreProduct(
-      name: 'Gentle Bath Wash',
-      category: 'Bath',
-      price: 'NGN 5,100',
-      image: 'assets/images/onboarding_quality.jpg',
-      color: Color(0xFFE4F3E7),
-    ),
-  ];
+  // Live data from the backend, so guests never see placeholder products.
+  List<_StoreCategory> _categories = const [];
+  List<_StoreProduct> _products = const [];
+  bool _loading = true;
+  String? _error;
 
   final _searchController = TextEditingController();
   String? _selectedCategory;
   int _selectedTab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await (ShopApi.products(size: 50), ShopApi.categories())
+          .wait;
+      if (!mounted) return;
+      final (products, categories) = result;
+      setState(() {
+        _products = products.map(_StoreProduct.from).toList();
+        _categories = categories
+            .take(5)
+            .map((c) => _StoreCategory(
+                  c.name,
+                  Icons.category_outlined,
+                  const Color(0xFFE6DFFF),
+                ))
+            .toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -403,7 +377,34 @@ class _GuestStorefrontState extends State<GuestStorefront> {
                       ),
                     ),
                   ),
-                  if (products.isEmpty)
+                  if (_loading)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(28),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                              color: Color(0xFF218CF2)),
+                        ),
+                      ),
+                    )
+                  else if (_error != null)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: Column(
+                          children: [
+                            Text(_error!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppColors.ink)),
+                            const SizedBox(height: 12),
+                            TextButton(
+                                onPressed: _load,
+                                child: const Text('Try again')),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (products.isEmpty)
                     const SliverToBoxAdapter(
                       child: Padding(
                         padding: EdgeInsets.all(28),
@@ -646,7 +647,17 @@ class _ProductCard extends StatelessWidget {
                       ),
                       child: ColoredBox(
                         color: product.color,
-                        child: Image.asset(product.image, fit: BoxFit.cover),
+                        child: product.image == null || product.image!.isEmpty
+                            ? const Center(
+                                child: Icon(Icons.child_care,
+                                    size: 34, color: Color(0xFF5683A9)))
+                            : Image.network(
+                                product.image!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const Center(
+                                    child: Icon(Icons.child_care,
+                                        size: 34, color: Color(0xFF5683A9))),
+                              ),
                       ),
                     ),
                     Positioned(

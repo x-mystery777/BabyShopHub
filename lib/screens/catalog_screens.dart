@@ -138,7 +138,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
         direction: _direction,
       );
 
-  void _reload() => setState(() => _future = _load());
+  void _reload() => setState(() {
+        _future = _load();
+      });
 
   @override
   Widget build(BuildContext context) {

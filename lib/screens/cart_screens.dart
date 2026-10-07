@@ -22,9 +22,10 @@ class _CartScreenState extends State<CartScreen> {
   final _store = CartStore.instance;
 
   @override
-  void initState() {
+    void initState() {
     super.initState();
-    _store.refresh();
+    // Wait until the first frame is drawn before refreshing the cart.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _store.refresh());
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -424,14 +425,7 @@ class OrderSuccessScreen extends StatelessWidget {
           child: Column(
             children: [
               const Spacer(),
-              Container(
-                width: 110,
-                height: 110,
-                decoration: const BoxDecoration(
-                    color: AppColors.blueTint, shape: BoxShape.circle),
-                child: const Icon(Icons.check_circle_rounded,
-                    size: 70, color: AppColors.blue),
-              ),
+              const OrderSuccessArtwork(),
               const SizedBox(height: 20),
               const Text('Order Placed!',
                   style: TextStyle(
@@ -486,6 +480,146 @@ class OrderSuccessScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+/// Order-confirmation artwork: a parcel with a check badge and a few
+/// floating hearts/sparkles, drawn with plain widgets so it needs no asset.
+/// Fits the same 110-logical-pixel footprint the icon used before.
+class OrderSuccessArtwork extends StatelessWidget {
+  const OrderSuccessArtwork({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 160,
+      height: 130,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Soft halo behind the parcel.
+          Container(
+            width: 110,
+            height: 110,
+            decoration: const BoxDecoration(
+                color: AppColors.blueTint, shape: BoxShape.circle),
+          ),
+          // Floating accents.
+          const Positioned(
+            top: 10,
+            left: 22,
+            child: Icon(Icons.favorite, size: 16, color: AppColors.pink),
+          ),
+          const Positioned(
+            top: 2,
+            right: 34,
+            child:
+                Icon(Icons.star_rounded, size: 18, color: AppColors.warning),
+          ),
+          const Positioned(
+            bottom: 12,
+            right: 20,
+            child: Icon(Icons.favorite, size: 13, color: AppColors.pinkLight),
+          ),
+          const Positioned(
+            bottom: 20,
+            left: 14,
+            child: Icon(Icons.auto_awesome,
+                size: 15, color: AppColors.blueLight),
+          ),
+          // The parcel.
+          const _ParcelBox(),
+          // Check badge on the corner.
+          Positioned(
+            right: 24,
+            bottom: 24,
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.success,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+              ),
+              child: const Icon(Icons.check_rounded,
+                  size: 22, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A simple isometric-ish shipping box with a lid seam and tape.
+class _ParcelBox extends StatelessWidget {
+  const _ParcelBox();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 84,
+      height: 76,
+      child: Stack(
+        children: [
+          // Box body.
+          Positioned(
+            left: 6,
+            top: 18,
+            child: Container(
+              width: 72,
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0C79A),
+                borderRadius: BorderRadius.circular(6),
+                border:
+                    Border.all(color: const Color(0xFFD9A86F), width: 1.5),
+              ),
+            ),
+          ),
+          // Lid.
+          Positioned(
+            left: 6,
+            top: 8,
+            child: Container(
+              width: 72,
+              height: 22,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7D6B0),
+                borderRadius: BorderRadius.circular(6),
+                border:
+                    Border.all(color: const Color(0xFFD9A86F), width: 1.5),
+              ),
+            ),
+          ),
+          // Tape strip down the front.
+          Positioned(
+            left: 38,
+            top: 8,
+            child: Container(
+              width: 8,
+              height: 66,
+              decoration: BoxDecoration(
+                color: AppColors.blueLight,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Label on the box.
+          Positioned(
+            left: 14,
+            top: 44,
+            child: Container(
+              width: 20,
+              height: 14,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

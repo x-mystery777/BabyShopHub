@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'screens/admin_screens.dart';
 import 'screens/main_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -40,12 +41,16 @@ class BabyShopHubApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: Session.navigatorKey,
       theme: buildAppTheme(),
-      // Logged in -> the shop. Logged out -> splash, onboarding, sign-in.
+      // Logged in -> admins go straight to the dashboard, shoppers to the shop.
+      // Logged out -> splash, onboarding, sign-in.
       home: ListenableBuilder(
         listenable: Session.instance,
-        builder: (context, _) => Session.instance.isLoggedIn
-            ? const MainShell()
-            : const StartupSequence(),
+        builder: (context, _) {
+          if (!Session.instance.isLoggedIn) return const StartupSequence();
+          return Session.instance.isAdmin
+              ? const AdminDashboardScreen()
+              : const MainShell();
+        },
       ),
     );
   }
@@ -772,7 +777,7 @@ class _ShopperSignInPageState extends State<_ShopperSignInPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _hidePassword = true;
-  bool _rememberMe = false;
+  bool _rememberMe = true;
   bool _isSubmitting = false;
 
   @override
@@ -914,41 +919,6 @@ class _ShopperSignInPageState extends State<_ShopperSignInPage> {
               ),
             ],
           ),
-        ),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _OrContinueDivider(),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _SocialAccountButton(
-                    label: 'Google',
-                    leading: const Text(
-                      'G',
-                      style: TextStyle(
-                        color: Color(0xFF4285F4),
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    onPressed: () =>
-                        _showAuthUnavailable(context, 'Google sign-in'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _SocialAccountButton(
-                    label: 'Apple',
-                    leading: const Icon(Icons.phone_iphone_rounded, size: 19),
-                    onPressed: () =>
-                        _showAuthUnavailable(context, 'Apple sign-in'),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
         Center(
           child: Wrap(
@@ -1427,54 +1397,6 @@ class _AccountActionButton extends StatelessWidget {
   }
 }
 
-class _SocialAccountButton extends StatelessWidget {
-  const _SocialAccountButton({
-    required this.label,
-    required this.leading,
-    required this.onPressed,
-  });
-
-  final String label;
-  final Widget leading;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: leading,
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF384D62),
-        side: const BorderSide(color: Color(0xFFD6E3EF)),
-        minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-}
-
-class _OrContinueDivider extends StatelessWidget {
-  const _OrContinueDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: Color(0xFFE4EBF2))),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text(
-            'Or continue with',
-            style: TextStyle(color: Colors.blueGrey.shade400, fontSize: 11),
-          ),
-        ),
-        const Expanded(child: Divider(color: Color(0xFFE4EBF2))),
-      ],
-    );
-  }
-}
-
 void _showAuthError(
   BuildContext context,
   String message, {
@@ -1500,19 +1422,6 @@ void _showAuthError(
               ),
       ),
     );
-}
-
-void _showAuthUnavailable(
-  BuildContext context,
-  String action, {
-  bool formValidated = false,
-}) {
-  final message = formValidated
-      ? 'Form is valid, but $action is not connected yet. Your information was not sent.'
-      : '$action is not connected yet. Your information was not sent.';
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _CloudPainter extends CustomPainter {

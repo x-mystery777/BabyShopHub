@@ -1,5 +1,5 @@
 import 'dart:convert';
-
+import '../core/api_config.dart';
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -21,22 +21,53 @@ class Session extends ChangeNotifier {
   bool get isLoggedIn => _api.token != null;
   bool get isAdmin => roles.contains('ROLE_ADMIN');
 
-  Future<void> restore() async {
+    Future<void> restore() async {
     _api.onUnauthorized = () => logout(callServer: false);
     await _api.loadToken();
-    if (_api.token != null && !_readClaims(_api.token!)) {
+    if (_api.token == null) return;
+    if (useMock) {
+      if (!_readClaims(_api.token!)) await _api.setToken(null);
+      return;
+    }
+    // Real backend: is the saved session still alive?
+    try {
+      final p = await _api.get('/account/profile') as Map<String, dynamic>;
+      email = p['email'] as String?;
+      roles = await _detectRoles();
+    } catch (_) {
       await _api.setToken(null);
     }
   }
 
-  Future<void> login(String email, String password,
+    Future<void> login(String email, String password,
       {bool remember = true}) async {
-    final data = await _api.post(
-        '/auth/login', {'email': email.trim(), 'password': password});
-    final token = (data as Map<String, dynamic>)['accessToken'] as String;
-    await _api.setToken(token, persist: remember);
-    _readClaims(token);
+    final body = {'email': email.trim(), 'password': password};
+    if (useMock) {
+      final data = await _api.post('/auth/login', body);
+      final token = (data as Map<String, dynamic>)['accessToken'] as String;
+      await _api.setToken(token, persist: remember);
+      _readClaims(token);
+    } else {
+      final cookie = await _api.loginSession('/auth/login', body);
+      await _api.setToken(cookie, persist: remember);
+      this.email = email.trim();
+      roles = await _detectRoles();
+    }
     notifyListeners();
+  }
+
+  /// The real backend gives no role at login, so ask an admin-only
+  /// endpoint: allowed = admin, refused = customer.
+  Future<List<String>> _detectRoles() async {
+    _api.suppressExpiry = true;
+    try {
+      await _api.get('/admin/support');
+      return ['ROLE_ADMIN'];
+    } catch (_) {
+      return ['ROLE_CUSTOMER'];
+    } finally {
+      _api.suppressExpiry = false;
+    }
   }
 
   Future<void> logout({bool callServer = true}) async {

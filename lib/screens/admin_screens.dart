@@ -4,6 +4,7 @@ import '../core/app_colors.dart';
 import '../core/format.dart';
 import '../models/models.dart';
 import '../services/shop_api.dart';
+import '../state/session.dart';
 import '../widgets/common.dart';
 
 /// Admin entry point (shown on Profile only for ROLE_ADMIN accounts).
@@ -29,49 +30,81 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16)),
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(icon, color: color),
                 const SizedBox(height: 8),
-                Text(value,
-                    style: const TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800)),
-                Text(label,
-                    style:
-                        const TextStyle(color: AppColors.slate, fontSize: 12)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: const TextStyle(color: AppColors.slate, fontSize: 12),
+                ),
               ],
             ),
           ),
         );
 
     Widget nav(IconData icon, String label, Widget page) => Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: SoftCard(
-            onTap: () => _open(page),
-            child: Row(children: [
-              Icon(icon, color: AppColors.blue),
-              const SizedBox(width: 14),
-              Expanded(
-                  child: Text(label,
-                      style: const TextStyle(
-                          color: AppColors.navy, fontWeight: FontWeight.w600))),
-              const Icon(Icons.chevron_right, color: AppColors.hint),
-            ]),
-          ),
-        );
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SoftCard(
+        onTap: () => _open(page),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.blue),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.hint),
+          ],
+        ),
+      ),
+    );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Dashboard')),
+      appBar: AppBar(
+        title: const Text('Admin Dashboard'),
+        actions: [
+          IconButton(
+            tooltip: 'Log out',
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              if (await confirmDialog(
+                context,
+                'Log out',
+                'Do you want to log out?',
+                confirm: 'Log out',
+              )) {
+                await Session.instance.logout();
+              }
+            },
+          ),
+        ],
+      ),
       body: AsyncView<(List<AppUser>, List<OrderModel>, List<Product>)>(
         key: _key,
-        load: () =>
-            (ShopApi.adminUsers(), ShopApi.adminOrders(), ShopApi.adminProducts())
-                .wait,
+        load: () => (
+          ShopApi.adminUsers(),
+          ShopApi.adminOrders(),
+          ShopApi.adminProducts(),
+        ).wait,
         builder: (context, data, reload) {
           final (users, orders, products) = data;
           final pending = orders
@@ -81,29 +114,67 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(20),
             children: [
-              Row(children: [
-                stat('Total Users', '${users.length}', Icons.people_outline,
-                    AppColors.blue),
-                const SizedBox(width: 12),
-                stat('Total Orders', '${orders.length}',
-                    Icons.shopping_bag_outlined, AppColors.success),
-              ]),
+              Row(
+                children: [
+                  stat(
+                    'Total Users',
+                    '${users.length}',
+                    Icons.people_outline,
+                    AppColors.blue,
+                  ),
+                  const SizedBox(width: 12),
+                  stat(
+                    'Total Orders',
+                    '${orders.length}',
+                    Icons.shopping_bag_outlined,
+                    AppColors.success,
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
-              Row(children: [
-                stat('Total Products', '${products.length}',
-                    Icons.inventory_2_outlined, AppColors.pink),
-                const SizedBox(width: 12),
-                stat('Pending Orders', '$pending', Icons.pending_actions,
-                    AppColors.warning),
-              ]),
+              Row(
+                children: [
+                  stat(
+                    'Total Products',
+                    '${products.length}',
+                    Icons.inventory_2_outlined,
+                    AppColors.pink,
+                  ),
+                  const SizedBox(width: 12),
+                  stat(
+                    'Pending Orders',
+                    '$pending',
+                    Icons.pending_actions,
+                    AppColors.warning,
+                  ),
+                ],
+              ),
               const SizedBox(height: 20),
-              nav(Icons.inventory_2_outlined, 'Manage Products',
-                  const AdminProductsScreen()),
-              nav(Icons.people_outline, 'Manage Users', const AdminUsersScreen()),
-              nav(Icons.receipt_long_outlined, 'Manage Orders',
-                  const AdminOrdersScreen()),
-              nav(Icons.support_agent, 'Support Tickets',
-                  const AdminSupportScreen()),
+              nav(
+                Icons.inventory_2_outlined,
+                'Manage Products',
+                const AdminProductsScreen(),
+              ),
+              nav(
+                Icons.warehouse_outlined,
+                'Manage Inventory',
+                const AdminInventoryScreen(),
+              ),
+              nav(
+                Icons.people_outline,
+                'Manage Users',
+                const AdminUsersScreen(),
+              ),
+              nav(
+                Icons.receipt_long_outlined,
+                'Manage Orders',
+                const AdminOrdersScreen(),
+              ),
+              nav(
+                Icons.support_agent,
+                'Support Tickets',
+                const AdminSupportScreen(),
+              ),
             ],
           );
         },
@@ -128,7 +199,10 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
   void _refresh() => setState(() => _key = UniqueKey());
 
   Future<void> _openForm([Product? p]) async {
-    final saved = await pushPage<bool>(context, AdminProductFormScreen(product: p));
+    final saved = await pushPage<bool>(
+      context,
+      AdminProductFormScreen(product: p),
+    );
     if (saved == true) _refresh();
   }
 
@@ -143,20 +217,25 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-                controller: name, decoration: const InputDecoration(hintText: 'Name')),
+              controller: name,
+              decoration: const InputDecoration(hintText: 'Name'),
+            ),
             const SizedBox(height: 10),
             TextField(
-                controller: desc,
-                decoration: const InputDecoration(hintText: 'Description')),
+              controller: desc,
+              decoration: const InputDecoration(hintText: 'Description'),
+            ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Create')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Create'),
+          ),
         ],
       ),
     );
@@ -175,12 +254,16 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Products'), actions: [
-        IconButton(
+      appBar: AppBar(
+        title: const Text('Products'),
+        actions: [
+          IconButton(
             tooltip: 'Add category',
             icon: const Icon(Icons.create_new_folder_outlined),
-            onPressed: _addCategory),
-      ]),
+            onPressed: _addCategory,
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.blue,
         foregroundColor: Colors.white,
@@ -200,11 +283,13 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 filled: true,
                 fillColor: AppColors.field,
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none),
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
                 enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none),
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
           ),
@@ -214,15 +299,19 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
               load: ShopApi.adminProducts,
               builder: (context, all, reload) {
                 final list = all
-                    .where((p) =>
-                        p.name.toLowerCase().contains(_query) ||
-                        p.brandName.toLowerCase().contains(_query))
+                    .where(
+                      (p) =>
+                          p.name.toLowerCase().contains(_query) ||
+                          p.brandName.toLowerCase().contains(_query),
+                    )
                     .toList();
                 if (list.isEmpty) {
-                  return ListView(children: const [
-                    SizedBox(height: 80),
-                    EmptyView('No products found.')
-                  ]);
+                  return ListView(
+                    children: const [
+                      SizedBox(height: 80),
+                      EmptyView('No products found.'),
+                    ],
+                  );
                 }
                 return ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -241,44 +330,58 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(p.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        color: AppColors.navy,
-                                        fontWeight: FontWeight.w700)),
-                                Text('${naira(p.price)} · ${p.brandName}',
-                                    style: const TextStyle(
-                                        color: AppColors.slate, fontSize: 12)),
+                                Text(
+                                  p.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.navy,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  '${naira(p.price)} · ${p.brandName}',
+                                  style: const TextStyle(
+                                    color: AppColors.slate,
+                                    fontSize: 12,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
                                 Text(
-                                    !p.active
-                                        ? 'Inactive'
-                                        : (p.inStock
+                                  !p.active
+                                      ? 'Inactive'
+                                      : (p.inStock
                                             ? 'In stock: ${p.stockQty}'
                                             : 'Out of stock'),
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: p.active && p.inStock
-                                            ? AppColors.success
-                                            : AppColors.error)),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: p.active && p.inStock
+                                        ? AppColors.success
+                                        : AppColors.error,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 20),
-                              onPressed: () => _openForm(p)),
+                            icon: const Icon(Icons.edit_outlined, size: 20),
+                            onPressed: () => _openForm(p),
+                          ),
                           if (p.active)
                             IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  size: 20, color: AppColors.error),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                size: 20,
+                                color: AppColors.error,
+                              ),
                               onPressed: () async {
                                 if (!await confirmDialog(
-                                    context,
-                                    'Remove product',
-                                    '"${p.name}" will be hidden from shoppers.',
-                                    confirm: 'Remove')) {
+                                  context,
+                                  'Remove product',
+                                  '"${p.name}" will be hidden from shoppers.',
+                                  confirm: 'Remove',
+                                )) {
                                   return;
                                 }
                                 try {
@@ -286,8 +389,11 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   reload();
                                 } catch (e) {
                                   if (context.mounted) {
-                                    showMessage(context, e.toString(),
-                                        error: true);
+                                    showMessage(
+                                      context,
+                                      e.toString(),
+                                      error: true,
+                                    );
                                   }
                                 }
                               },
@@ -317,22 +423,28 @@ class AdminProductFormScreen extends StatefulWidget {
 class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final _form = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.product?.name ?? '');
-  late final _desc =
-      TextEditingController(text: widget.product?.description ?? '');
+  late final _desc = TextEditingController(
+    text: widget.product?.description ?? '',
+  );
   late final _price = TextEditingController(
-      text: widget.product == null ? '' : widget.product!.price.toStringAsFixed(0));
-  late final _stock =
-      TextEditingController(text: widget.product?.stockQty.toString() ?? '');
-  final _image = TextEditingController();
+    text: widget.product == null
+        ? ''
+        : widget.product!.price.toStringAsFixed(0),
+  );
+  late final _stock = TextEditingController(
+    text: widget.product?.stockQty.toString() ?? '',
+  );
   late int? _categoryId = widget.product?.categoryId;
   late int? _brandId = widget.product?.brandId;
-  late final Future<(List<Category>, List<Brand>)> _lookups =
-      (ShopApi.categories(), ShopApi.brands()).wait;
+  late final Future<(List<Category>, List<Brand>)> _lookups = (
+    ShopApi.categories(),
+    ShopApi.brands(),
+  ).wait;
   bool _saving = false;
 
   @override
   void dispose() {
-    for (final c in [_name, _desc, _price, _stock, _image]) {
+    for (final c in [_name, _desc, _price, _stock]) {
       c.dispose();
     }
     super.dispose();
@@ -356,7 +468,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
           stock: stock,
           categoryId: _categoryId!,
           brandId: _brandId!,
-          imageUrl: _image.text,
         );
       } else {
         await ShopApi.updateProduct(
@@ -388,11 +499,14 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(
-                child: CircularProgressIndicator(color: AppColors.blue));
+              child: CircularProgressIndicator(color: AppColors.blue),
+            );
           }
           if (snap.hasError) {
-            return ErrorView(snap.error.toString(),
-                onRetry: () => Navigator.pop(context));
+            return ErrorView(
+              snap.error.toString(),
+              onRetry: () => Navigator.pop(context),
+            );
           }
           final (categories, brands) = snap.data!;
           return Form(
@@ -408,14 +522,16 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
-                    controller: _desc,
-                    maxLines: 3,
-                    decoration: fieldDecoration('Description')),
+                  controller: _desc,
+                  maxLines: 3,
+                  decoration: fieldDecoration('Description'),
+                ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _price,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: fieldDecoration('Price (₦)'),
                   validator: (v) {
                     final n = double.tryParse(v?.trim() ?? '');
@@ -440,37 +556,181 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                   decoration: fieldDecoration('Category'),
                   items: [
                     for (final c in categories)
-                      DropdownMenuItem(value: c.id, child: Text(c.name))
+                      DropdownMenuItem(value: c.id, child: Text(c.name)),
                   ],
                   onChanged: (v) => setState(() => _categoryId = v),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  initialValue:
-                      brands.any((b) => b.id == _brandId) ? _brandId : null,
+                  initialValue: brands.any((b) => b.id == _brandId)
+                      ? _brandId
+                      : null,
                   decoration: fieldDecoration('Brand'),
                   items: [
                     for (final b in brands)
-                      DropdownMenuItem(value: b.id, child: Text(b.name))
+                      DropdownMenuItem(value: b.id, child: Text(b.name)),
                   ],
                   onChanged: (v) => setState(() => _brandId = v),
                 ),
-                if (!editing) ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                      controller: _image,
-                      keyboardType: TextInputType.url,
-                      decoration: fieldDecoration('Image URL (optional)')),
-                ],
                 const SizedBox(height: 24),
                 PrimaryButton(
-                    label: editing ? 'Save Changes' : 'Create Product',
-                    loading: _saving,
-                    onPressed: _save),
+                  label: editing ? 'Save Changes' : 'Create Product',
+                  loading: _saving,
+                  onPressed: _save,
+                ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// --------------------------------------------------------------- inventory
+
+class AdminInventoryScreen extends StatefulWidget {
+  const AdminInventoryScreen({super.key});
+
+  @override
+  State<AdminInventoryScreen> createState() => _AdminInventoryScreenState();
+}
+
+class _AdminInventoryScreenState extends State<AdminInventoryScreen> {
+  int _filter = 0;
+
+  static const _filters = ['All', 'Low Stock', 'Out of Stock'];
+
+  bool _match(Product p) => switch (_filter) {
+    1 => p.active && p.stockQty > 0 && p.stockQty <= 10,
+    2 => p.active && p.stockQty == 0,
+    _ => true,
+  };
+
+  Future<void> _adjust(Product p, VoidCallback reload) async {
+    final controller = TextEditingController(text: '${p.stockQty}');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(p.name),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: fieldDecoration('Stock quantity'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final qty = int.tryParse(controller.text.trim());
+    controller.dispose();
+    if (ok != true || qty == null || qty < 0) return;
+    try {
+      await ShopApi.updateStock(p.id, qty);
+      if (mounted) showMessage(context, '${p.name}: stock set to $qty');
+      reload();
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString(), error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Inventory')),
+      body: Column(
+        children: [
+          ChipRow(
+            labels: _filters,
+            selected: _filter,
+            onSelected: (i) => setState(() => _filter = i),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: AsyncView<List<Product>>(
+              load: ShopApi.adminProducts,
+              builder: (context, all, reload) {
+                final list = all.where(_match).toList();
+                if (list.isEmpty) {
+                  return ListView(
+                    children: const [
+                      SizedBox(height: 80),
+                      EmptyView('No products here.'),
+                    ],
+                  );
+                }
+                return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  itemCount: list.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, i) {
+                    final p = list[i];
+                    return SoftCard(
+                      padding: const EdgeInsets.all(10),
+                      child: Row(
+                        children: [
+                          ProductImage(p.imageUrl, size: 56, iconSize: 28),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  p.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.navy,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  '${naira(p.price)} · ${p.brandName}',
+                                  style: const TextStyle(
+                                    color: AppColors.slate,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  !p.active
+                                      ? 'Inactive'
+                                      : (p.inStock
+                                            ? 'In stock: ${p.stockQty}'
+                                            : 'Out of stock'),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: p.active && p.inStock
+                                        ? AppColors.success
+                                        : AppColors.error,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => _adjust(p, reload),
+                            child: const Text('Adjust'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -488,6 +748,162 @@ class AdminUsersScreen extends StatefulWidget {
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
   String _query = '';
 
+  /// Read-only detail sheet for one user, plus the suspend/restore action.
+  Future<void> _details(AppUser u, VoidCallback reload) async {
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: AppColors.blueTint,
+                  child: Text(
+                    u.name.isEmpty ? '?' : u.name[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: AppColors.blue,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        u.name,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        u.isAdmin ? 'Administrator' : 'Customer',
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                StatusChip(
+                  u.suspended ? 'CANCELLED' : 'DELIVERED',
+                  label: u.suspended ? 'Suspended' : 'Active',
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _detailRow(Icons.mail_outline, 'Email', u.email),
+            _detailRow(
+              Icons.phone_outlined,
+              'Phone',
+              (u.phoneNumber ?? '').isEmpty ? 'Not provided' : u.phoneNumber!,
+            ),
+            _detailRow(
+              Icons.verified_user_outlined,
+              'Account',
+              u.enabled ? 'Email verified' : 'Not verified',
+            ),
+            _detailRow(
+              Icons.admin_panel_settings_outlined,
+              'Role',
+              u.roles.isEmpty ? 'None' : u.roles.join(', '),
+            ),
+            const SizedBox(height: 8),
+            if (!u.isAdmin) ...[
+              const SizedBox(height: 6),
+              if (u.suspended)
+                PrimaryButton(
+                  label: 'Restore Account',
+                  onPressed: () async {
+                    final navigator = Navigator.of(sheetContext);
+                    try {
+                      await ShopApi.setSuspended(u.id, false);
+                      navigator.pop(true);
+                    } catch (e) {
+                      if (mounted) {
+                        showMessage(context, e.toString(), error: true);
+                      }
+                    }
+                  },
+                )
+              else
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    shape: const StadiumBorder(),
+                    foregroundColor: AppColors.error,
+                    side: const BorderSide(color: AppColors.error),
+                  ),
+                  onPressed: () async {
+                    final navigator = Navigator.of(sheetContext);
+                    try {
+                      await ShopApi.setSuspended(u.id, true);
+                      navigator.pop(true);
+                    } catch (e) {
+                      if (mounted) {
+                        showMessage(context, e.toString(), error: true);
+                      }
+                    }
+                  },
+                  child: const Text('Suspend Account'),
+                ),
+            ] else
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'Administrators cannot be suspended.',
+                  style: TextStyle(color: AppColors.hint, fontSize: 12),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (changed == true) reload();
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: AppColors.blue),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 70,
+          child: Text(
+            label,
+            style: const TextStyle(color: AppColors.slate, fontSize: 12),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -504,11 +920,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 filled: true,
                 fillColor: AppColors.field,
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none),
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
                 enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none),
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
           ),
@@ -517,9 +935,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               load: ShopApi.adminUsers,
               builder: (context, all, reload) {
                 final list = all
-                    .where((u) =>
-                        u.name.toLowerCase().contains(_query) ||
-                        u.email.toLowerCase().contains(_query))
+                    .where(
+                      (u) =>
+                          u.name.toLowerCase().contains(_query) ||
+                          u.email.toLowerCase().contains(_query),
+                    )
                     .toList();
                 return ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -529,38 +949,50 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   itemBuilder: (context, i) {
                     final u = list[i];
                     return SoftCard(
+                      onTap: () => _details(u, reload),
                       child: Row(
                         children: [
                           CircleAvatar(
                             backgroundColor: AppColors.blueTint,
                             child: Text(
-                                u.name.isEmpty ? '?' : u.name[0].toUpperCase(),
-                                style: const TextStyle(
-                                    color: AppColors.blue,
-                                    fontWeight: FontWeight.w700)),
+                              u.name.isEmpty ? '?' : u.name[0].toUpperCase(),
+                              style: const TextStyle(
+                                color: AppColors.blue,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(u.name,
-                                    style: const TextStyle(
-                                        color: AppColors.navy,
-                                        fontWeight: FontWeight.w700)),
-                                Text(u.email,
-                                    style: const TextStyle(
-                                        color: AppColors.slate, fontSize: 12)),
                                 Text(
-                                    '${u.isAdmin ? 'Admin' : 'Customer'}'
-                                    '${u.enabled ? '' : ' · Not verified'}'
-                                    '${u.suspended ? ' · Suspended' : ''}',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: u.suspended
-                                            ? AppColors.error
-                                            : AppColors.hint)),
+                                  u.name,
+                                  style: const TextStyle(
+                                    color: AppColors.navy,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  u.email,
+                                  style: const TextStyle(
+                                    color: AppColors.slate,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  '${u.isAdmin ? 'Admin' : 'Customer'}'
+                                  '${u.enabled ? '' : ' · Not verified'}'
+                                  '${u.suspended ? ' · Suspended' : ''}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: u.suspended
+                                        ? AppColors.error
+                                        : AppColors.hint,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -568,20 +1000,29 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                             TextButton(
                               onPressed: () async {
                                 try {
-                                  await ShopApi.setSuspended(u.id, !u.suspended);
+                                  await ShopApi.setSuspended(
+                                    u.id,
+                                    !u.suspended,
+                                  );
                                   reload();
                                 } catch (e) {
                                   if (context.mounted) {
-                                    showMessage(context, e.toString(),
-                                        error: true);
+                                    showMessage(
+                                      context,
+                                      e.toString(),
+                                      error: true,
+                                    );
                                   }
                                 }
                               },
-                              child: Text(u.suspended ? 'Restore' : 'Suspend',
-                                  style: TextStyle(
-                                      color: u.suspended
-                                          ? AppColors.success
-                                          : AppColors.error)),
+                              child: Text(
+                                u.suspended ? 'Restore' : 'Suspend',
+                                style: TextStyle(
+                                  color: u.suspended
+                                      ? AppColors.success
+                                      : AppColors.error,
+                                ),
+                              ),
                             ),
                         ],
                       ),
@@ -600,7 +1041,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 // ------------------------------------------------------------------ orders
 
 const _orderFlow = ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'];
-const _orderFilters = ['All', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+const _orderFilters = [
+  'All',
+  'Processing',
+  'Shipped',
+  'Delivered',
+  'Cancelled',
+];
 
 class AdminOrdersScreen extends StatefulWidget {
   const AdminOrdersScreen({super.key});
@@ -613,19 +1060,22 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   int _filter = 0;
 
   bool _match(String status) => switch (_orderFilters[_filter]) {
-        'Processing' => status == 'CONFIRMED' || status == 'PACKED',
-        'Shipped' => status == 'SHIPPED',
-        'Delivered' => status == 'DELIVERED',
-        'Cancelled' => status == 'CANCELLED',
-        _ => true,
-      };
+    'Processing' => status == 'CONFIRMED' || status == 'PACKED',
+    'Shipped' => status == 'SHIPPED',
+    'Delivered' => status == 'DELIVERED',
+    'Cancelled' => status == 'CANCELLED',
+    _ => true,
+  };
 
   Future<void> _change(OrderModel o, String status, VoidCallback reload) async {
     try {
       await ShopApi.setOrderStatus(o.id, status);
       if (mounted) {
         Navigator.pop(context);
-        showMessage(context, 'Order ${orderNumber(o.id)} is now ${statusLabel(status)}');
+        showMessage(
+          context,
+          'Order ${orderNumber(o.id)} is now ${statusLabel(status)}',
+        );
       }
       reload();
     } catch (e) {
@@ -644,37 +1094,51 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (_) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Expanded(
-                  child: Text('Order ${orderNumber(o.id)}',
-                      style: const TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800))),
-              StatusChip(o.status),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Order ${orderNumber(o.id)}',
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                StatusChip(o.status),
+              ],
+            ),
             const SizedBox(height: 8),
-            Text('${formatDateTime(o.createdAt)} · ${naira(o.total)}',
-                style: const TextStyle(color: AppColors.slate)),
+            Text(
+              '${formatDateTime(o.createdAt)} · ${naira(o.total)}',
+              style: const TextStyle(color: AppColors.slate),
+            ),
             const SizedBox(height: 10),
             for (final l in o.items)
-              Text('${l.quantity} × ${l.name}',
-                  style: const TextStyle(color: AppColors.ink)),
+              Text(
+                '${l.quantity} × ${l.name}',
+                style: const TextStyle(color: AppColors.ink),
+              ),
             const SizedBox(height: 10),
-            Text('Ship to: ${o.shippingAddress}',
-                style: const TextStyle(color: AppColors.slate, fontSize: 12)),
+            Text(
+              'Ship to: ${o.shippingAddress}',
+              style: const TextStyle(color: AppColors.slate, fontSize: 12),
+            ),
             const SizedBox(height: 16),
             if (next != null)
               PrimaryButton(
-                  label: 'Mark as ${statusLabel(next)}',
-                  onPressed: () => _change(o, next, reload)),
+                label: 'Mark as ${statusLabel(next)}',
+                onPressed: () => _change(o, next, reload),
+              ),
             if (canCancel) ...[
               const SizedBox(height: 10),
               OutlinedButton(
@@ -689,8 +1153,10 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
               ),
             ],
             if (next == null && !canCancel)
-              const Text('No further actions for this order.',
-                  style: TextStyle(color: AppColors.hint)),
+              const Text(
+                'No further actions for this order.',
+                style: TextStyle(color: AppColors.hint),
+              ),
           ],
         ),
       ),
@@ -704,9 +1170,10 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
       body: Column(
         children: [
           ChipRow(
-              labels: _orderFilters,
-              selected: _filter,
-              onSelected: (i) => setState(() => _filter = i)),
+            labels: _orderFilters,
+            selected: _filter,
+            onSelected: (i) => setState(() => _filter = i),
+          ),
           const SizedBox(height: 10),
           Expanded(
             child: AsyncView<List<OrderModel>>(
@@ -714,10 +1181,12 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
               builder: (context, all, reload) {
                 final list = all.where((o) => _match(o.status)).toList();
                 if (list.isEmpty) {
-                  return ListView(children: const [
-                    SizedBox(height: 80),
-                    EmptyView('No orders here.')
-                  ]);
+                  return ListView(
+                    children: const [
+                      SizedBox(height: 80),
+                      EmptyView('No orders here.'),
+                    ],
+                  );
                 }
                 return ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -734,24 +1203,33 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(orderNumber(o.id),
-                                    style: const TextStyle(
-                                        color: AppColors.navy,
-                                        fontWeight: FontWeight.w700)),
                                 Text(
-                                    '${formatDate(o.createdAt)} · ${o.itemCount} items',
-                                    style: const TextStyle(
-                                        color: AppColors.slate, fontSize: 12)),
+                                  orderNumber(o.id),
+                                  style: const TextStyle(
+                                    color: AppColors.navy,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  '${formatDate(o.createdAt)} · ${o.itemCount} items',
+                                  style: const TextStyle(
+                                    color: AppColors.slate,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text(naira(o.total),
-                                  style: const TextStyle(
-                                      color: AppColors.navy,
-                                      fontWeight: FontWeight.w800)),
+                              Text(
+                                naira(o.total),
+                                style: const TextStyle(
+                                  color: AppColors.navy,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                               const SizedBox(height: 4),
                               StatusChip(o.status),
                             ],
@@ -783,10 +1261,12 @@ class AdminSupportScreen extends StatelessWidget {
         load: ShopApi.adminTickets,
         builder: (context, tickets, reload) {
           if (tickets.isEmpty) {
-            return ListView(children: const [
-              SizedBox(height: 80),
-              EmptyView('No support tickets.')
-            ]);
+            return ListView(
+              children: const [
+                SizedBox(height: 80),
+                EmptyView('No support tickets.'),
+              ],
+            );
           }
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -798,29 +1278,43 @@ class AdminSupportScreen extends StatelessWidget {
               return SoftCard(
                 onTap: () async {
                   final changed = await showDialog<bool>(
-                      context: context, builder: (_) => _TicketDialog(ticket: t));
+                    context: context,
+                    builder: (_) => _TicketDialog(ticket: t),
+                  );
                   if (changed == true) reload();
                 },
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      Expanded(
-                          child: Text(t.subject,
-                              style: const TextStyle(
-                                  color: AppColors.navy,
-                                  fontWeight: FontWeight.w700))),
-                      StatusChip(t.status),
-                    ]),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            t.subject,
+                            style: const TextStyle(
+                              color: AppColors.navy,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        StatusChip(t.status),
+                      ],
+                    ),
                     const SizedBox(height: 4),
-                    Text(t.email,
-                        style: const TextStyle(
-                            color: AppColors.slate, fontSize: 12)),
+                    Text(
+                      t.email,
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 12,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text(t.message,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AppColors.ink)),
+                    Text(
+                      t.message,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.ink),
+                    ),
                   ],
                 ),
               );
@@ -841,7 +1335,9 @@ class _TicketDialog extends StatefulWidget {
 }
 
 class _TicketDialogState extends State<_TicketDialog> {
-  late final _reply = TextEditingController(text: widget.ticket.adminResponse ?? '');
+  late final _reply = TextEditingController(
+    text: widget.ticket.adminResponse ?? '',
+  );
   late String _status = widget.ticket.status;
   bool _saving = false;
 
@@ -854,7 +1350,11 @@ class _TicketDialogState extends State<_TicketDialog> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      await ShopApi.setTicketStatus(widget.ticket.id, _status, _reply.text.trim());
+      await ShopApi.setTicketStatus(
+        widget.ticket.id,
+        _status,
+        _reply.text.trim(),
+      );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
@@ -880,7 +1380,10 @@ class _TicketDialogState extends State<_TicketDialog> {
               decoration: fieldDecoration('Status'),
               items: const [
                 DropdownMenuItem(value: 'OPEN', child: Text('Open')),
-                DropdownMenuItem(value: 'IN_PROGRESS', child: Text('In progress')),
+                DropdownMenuItem(
+                  value: 'IN_PROGRESS',
+                  child: Text('In progress'),
+                ),
                 DropdownMenuItem(value: 'CLOSED', child: Text('Closed')),
               ],
               onChanged: (v) => setState(() => _status = v ?? _status),
@@ -896,10 +1399,13 @@ class _TicketDialogState extends State<_TicketDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel')),
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
         TextButton(
-            onPressed: _saving ? null : _save, child: const Text('Save')),
+          onPressed: _saving ? null : _save,
+          child: const Text('Save'),
+        ),
       ],
     );
   }

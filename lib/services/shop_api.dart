@@ -1,6 +1,7 @@
 import '../core/api_client.dart';
 import '../core/format.dart';
 import '../models/models.dart';
+import 'dart:typed_data';
 
 /// Every backend call the app makes, in one place.
 class ShopApi {
@@ -170,14 +171,15 @@ class ShopApi {
   static Future<List<Product>> adminProducts() async =>
       _list(await _c.get('/admin/products'), Product.fromJson);
 
-  static Future<void> createProduct({
+    static Future<void> createProduct({
     required String name,
     required String description,
     required double price,
     required int stock,
     required int categoryId,
     required int brandId,
-    String? imageUrl,
+    Uint8List? imageBytes,
+    String? imageName,
   }) =>
       _c.postMultipart(
         '/admin/products',
@@ -188,11 +190,16 @@ class ShopApi {
           'description': description,
           'price': price,
           'stockQty': stock,
-          'imageUrls': [
-            if (imageUrl != null && imageUrl.trim().isNotEmpty) imageUrl.trim()
-          ],
+          'imageUrls': <String>[],
         },
+        fileBytes: imageBytes,
+        fileName: imageName,
       );
+
+  static Future<void> replaceProductImage(
+          int id, Uint8List bytes, String fileName) =>
+      _c.uploadFile('/admin/products/$id/image',
+          bytes: bytes, fileName: fileName);
 
   static Future<void> updateProduct(
     int id, {
@@ -214,6 +221,10 @@ class ShopApi {
 
   static Future<void> deactivateProduct(int id) =>
       _c.delete('/admin/products/$id');
+
+  /// Inventory: change only the stock quantity of a product.
+  static Future<void> updateStock(int id, int stockQty) =>
+      _c.patch('/admin/products/$id', {'stockQty': stockQty});
 
   static Future<void> createCategory(String name, String description) =>
       _c.post('/admin/categories', {'name': name, 'description': description});

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/shop_api.dart';
+
 /// UI model for the category fields described in the SRS/schema.
 class StoreCategory {
   const StoreCategory({
@@ -29,74 +31,48 @@ class CategoryTab extends StatefulWidget {
 }
 
 class _CategoryTabState extends State<CategoryTab> {
-  static const _categories = <StoreCategory>[
-    StoreCategory(
-      categoryId: 1,
-      name: 'Diapers',
-      description: 'Soft, comfortable diapers and changing essentials.',
-      icon: Icons.inventory_2_outlined,
-      color: Color(0xFF7BD5E6),
-    ),
-    StoreCategory(
-      categoryId: 2,
-      name: 'Baby Food',
-      description: 'Food, snacks, and nutrition for little ones.',
-      icon: Icons.lunch_dining_rounded,
-      color: Color(0xFFFFB86B),
-    ),
-    StoreCategory(
-      categoryId: 3,
-      name: 'Clothing',
-      description: 'Everyday outfits and soft baby clothing.',
-      icon: Icons.checkroom_rounded,
-      color: Color(0xFF55AFFF),
-    ),
-    StoreCategory(
-      categoryId: 4,
-      name: 'Toys',
-      description: 'Playtime toys for growing minds.',
-      icon: Icons.toys_rounded,
-      color: Color(0xFFFF91A9),
-    ),
-    StoreCategory(
-      categoryId: 5,
-      name: 'Feeding',
-      description: 'Bottles, cups, and feeding accessories.',
-      icon: Icons.local_drink_rounded,
-      color: Color(0xFFFFAA62),
-    ),
-    StoreCategory(
-      categoryId: 6,
-      name: 'Skincare',
-      description: 'Gentle bath and skincare products.',
-      icon: Icons.spa_rounded,
-      color: Color(0xFF57AFFF),
-    ),
-    StoreCategory(
-      categoryId: 7,
-      name: 'Accessories',
-      description: 'Useful finishing touches for baby and parent.',
-      icon: Icons.auto_awesome_rounded,
-      color: Color(0xFFAA89EE),
-    ),
-    StoreCategory(
-      categoryId: 8,
-      name: 'Strollers',
-      description: 'Strollers and on-the-go travel essentials.',
-      icon: Icons.stroller_rounded,
-      color: Color(0xFF5DC5C6),
-    ),
-    StoreCategory(
-      categoryId: 9,
-      name: 'Others',
-      description: 'More helpful essentials for your family.',
-      icon: Icons.backpack_outlined,
-      color: Color(0xFFAA89EE),
-    ),
-  ];
+  /// Live categories from the backend (no placeholder data).
+  List<StoreCategory> _categories = const [];
+  bool _loading = true;
+  String? _error;
 
   final _searchController = TextEditingController();
   bool _searching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final categories = await ShopApi.categories();
+      if (!mounted) return;
+      setState(() {
+        _categories = categories
+            .map((c) => StoreCategory(
+                  categoryId: c.id,
+                  name: c.name,
+                  description: c.description ?? '',
+                  icon: Icons.category_outlined,
+                  color: const Color(0xFF55AFFF),
+                ))
+            .toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -172,25 +148,43 @@ class _CategoryTabState extends State<CategoryTab> {
             ),
           ),
         Expanded(
-          child: categories.isEmpty
-              ? const Center(child: Text('No categories found.'))
-              : GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
-                  itemCount: categories.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 9,
-                    mainAxisSpacing: 9,
-                    childAspectRatio: 0.9,
-                  ),
-                  itemBuilder: (context, index) {
-                    final category = categories[index];
-                    return _CategoryCard(
-                      category: category,
-                      onTap: () => widget.onCategorySelected(category.name),
-                    );
-                  },
-                ),
+          child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF218CF2)))
+              : _error != null
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          TextButton(
+                              onPressed: _load,
+                              child: const Text('Try again')),
+                        ],
+                      ),
+                    )
+                  : categories.isEmpty
+                      ? const Center(child: Text('No categories found.'))
+                      : GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
+                          itemCount: categories.length,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 9,
+                            mainAxisSpacing: 9,
+                            childAspectRatio: 0.9,
+                          ),
+                          itemBuilder: (context, index) {
+                            final category = categories[index];
+                            return _CategoryCard(
+                              category: category,
+                              onTap: () =>
+                                  widget.onCategorySelected(category.name),
+                            );
+                          },
+                        ),
         ),
       ],
     );

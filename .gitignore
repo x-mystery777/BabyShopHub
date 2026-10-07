@@ -32,3 +32,35 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Flutter / Dart ###
+.flutter-plugins
+.flutter-plugins-dependencies
+.idea/
+*.iml
+*.ipr
+*.iws
+.packages
+.pub-cache/
+.pub/
+
+### Android ###
+android/.gradle/
+android/captures/
+android/local.properties
+android/key.properties
+android/**/GeneratedPluginRegistrant.java
+*.jks
+*.keystore
+
+### iOS ###
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+
+### macOS / Windows / Linux desktop build output ###
+macos/Pods/
+
+### Backend runtime uploads ###
+backend/uploads/

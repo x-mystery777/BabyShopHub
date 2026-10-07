@@ -38,6 +38,14 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
           child: Row(
             children: [
+              Image.asset(
+                'assets/images/brand_logo.png',
+                width: 32,
+                height: 32,
+                fit: BoxFit.contain,
+                semanticLabel: 'BabyShopHub logo',
+              ),
+              const SizedBox(width: 8),
               RichText(
                 text: const TextSpan(
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
@@ -125,38 +133,64 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _banner(BuildContext context) => Container(
-        padding: const EdgeInsets.all(20),
-        width: double.infinity,
-        decoration: BoxDecoration(
-            color: AppColors.pinkTint, borderRadius: BorderRadius.circular(20)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Happy Babies\nHappy Parents',
-                style: TextStyle(
-                    color: AppColors.pink,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    height: 1.15)),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () => pushPage(
-                  context, const ProductListScreen(title: 'All Products')),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+  Widget _banner(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: SizedBox(
+          width: double.infinity,
+          height: 150,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset('assets/images/baby_b.jpg', fit: BoxFit.cover),
+              DecoratedBox(
                 decoration: BoxDecoration(
-                    color: AppColors.pink,
-                    borderRadius: BorderRadius.circular(20)),
-                child: const Text('Shop Now',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13)),
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.pinkTint.withValues(alpha: 0.98),
+                      AppColors.pinkTint.withValues(alpha: 0.72),
+                      AppColors.pinkTint.withValues(alpha: 0.10),
+                    ],
+                    stops: const [0, 0.5, 1],
+                  ),
+                ),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Happy Babies\nHappy Parents',
+                          style: TextStyle(
+                              color: AppColors.pink,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              height: 1.15)),
+                      const SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: () => pushPage(context,
+                            const ProductListScreen(title: 'All Products')),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 9),
+                          decoration: BoxDecoration(
+                              color: AppColors.pink,
+                              borderRadius: BorderRadius.circular(20)),
+                          child: const Text('Shop Now',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
 

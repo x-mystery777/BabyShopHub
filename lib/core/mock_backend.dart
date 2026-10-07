@@ -636,6 +636,7 @@ class MockBackend {
         if (method == 'GET' && seg.length == 2) return _products;
         if (method == 'POST' && seg.length == 2) return _saveProduct(null, b);
         if (id != null && method == 'PUT') return _saveProduct(id, b);
+        if (id != null && method == 'PATCH') return _patchProduct(id, b);
         if (id != null && method == 'DELETE') {
           _findProduct(id)['active'] = false;
           return null;
@@ -758,6 +759,35 @@ class MockBackend {
     p['categoryName'] = category['name'];
     p['brandId'] = brand['brandId'];
     p['brandName'] = brand['name'];
+    return p;
+  }
+
+  /// Partial update: only the fields present in the body are changed.
+  /// Used by the inventory screen to adjust stock on its own.
+  Map<String, dynamic> _patchProduct(int id, Map<String, dynamic> b) {
+    final p = _findProduct(id);
+    if (b.containsKey('name')) p['name'] = (b['name'] as String? ?? '').trim();
+    if (b.containsKey('description')) p['description'] = b['description'];
+    if (b.containsKey('price')) p['price'] = (b['price'] as num).toDouble();
+    if (b.containsKey('stockQty')) {
+      final stock = (b['stockQty'] as num?)?.toInt();
+      if (stock == null || stock < 0) _fail('stockQty: Enter a valid stock');
+      p['stockQty'] = stock;
+    }
+    if (b.containsKey('categoryId')) {
+      final category = _categories.firstWhere(
+          (c) => c['categoryId'] == (b['categoryId'] as num?)?.toInt(),
+          orElse: () => _fail('Category not found'));
+      p['categoryId'] = category['categoryId'];
+      p['categoryName'] = category['name'];
+    }
+    if (b.containsKey('brandId')) {
+      final brand = _brands.firstWhere(
+          (c) => c['brandId'] == (b['brandId'] as num?)?.toInt(),
+          orElse: () => _fail('Brand not found'));
+      p['brandId'] = brand['brandId'];
+      p['brandName'] = brand['name'];
+    }
     return p;
   }
 
