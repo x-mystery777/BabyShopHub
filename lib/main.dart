@@ -1,16 +1,25 @@
 import 'dart:async';
 import 'dart:math' as math;
-
+import 'screens/admin_screens.dart';
+import 'screens/main_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'core/api_client.dart';
+import 'core/app_theme.dart';
+import 'core/format.dart';
+import 'features/gateway/presentation/gateway_screen.dart';
+import 'features/store/presentation/guest_storefront.dart';
+import 'screens/auth_extra.dart';
+import 'services/shop_api.dart';
+import 'state/session.dart';
 
 const _sky = Color(0xFFC6E7F4);
 const _ink = Color(0xFF594F4B);
-const _pink = Color(0xFFF5A6AE);
 const _blue = Color(0xFF9ABDE4);
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Session.instance.restore();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -30,12 +39,19 @@ class BabyShopHubApp extends StatelessWidget {
     return MaterialApp(
       title: 'BabyShopHub',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: _sky,
-        colorScheme: ColorScheme.fromSeed(seedColor: _pink),
+      navigatorKey: Session.navigatorKey,
+      theme: buildAppTheme(),
+      // Logged in -> admins go straight to the dashboard, shoppers to the shop.
+      // Logged out -> splash, onboarding, sign-in.
+      home: ListenableBuilder(
+        listenable: Session.instance,
+        builder: (context, _) {
+          if (!Session.instance.isLoggedIn) return const StartupSequence();
+          return Session.instance.isAdmin
+              ? const AdminDashboardScreen()
+              : const MainShell();
+        },
       ),
-      home: const StartupSequence(),
     );
   }
 }
@@ -57,6 +73,10 @@ class _StartupSequenceState extends State<StartupSequence> {
 
   int _page = 0;
   bool _showAccountAccess = false;
+  bool _showGateway = false;
+  bool _showGuestStore = false;
+  bool _openRegistration = false;
+  bool _returnToGuest = false;
   Timer? _timer;
 
   @override
@@ -82,16 +102,37 @@ class _StartupSequenceState extends State<StartupSequence> {
 
   Widget _pageForIndex() {
     if (_page >= _durations.length) {
+      if (_showGuestStore) {
+        return GuestStorefront(
+          key: const ValueKey('guest-storefront'),
+          onBackToGateway: () => setState(() => _showGuestStore = false),
+          onRequireAccount: _openAccountFlow,
+        );
+      }
       if (_showAccountAccess) {
         return ShopperAccountFlow(
           key: const ValueKey('shopper-account-access'),
-          onBackToOnboarding: () =>
-              setState(() => _showAccountAccess = false),
+          initiallyShowRegistration: _openRegistration,
+          onBackToOnboarding: () => setState(() {
+            _showAccountAccess = false;
+            _showGuestStore = _returnToGuest;
+            _openRegistration = false;
+            _returnToGuest = false;
+          }),
         );
       }
-      return OnboardingFlow(
-        key: const ValueKey('onboarding'),
-        onComplete: () => setState(() => _showAccountAccess = true),
+      if (!_showGateway) {
+        return OnboardingFlow(
+          key: const ValueKey('onboarding'),
+          onComplete: () => setState(() => _showGateway = true),
+        );
+      }
+      return GatewayScreen(
+        key: const ValueKey('gateway'),
+        onBack: () => setState(() => _showGateway = false),
+        onBrowseAsGuest: () => setState(() => _showGuestStore = true),
+        onLogin: () => _openAccountFlow(false),
+        onSignUp: () => _openAccountFlow(true),
       );
     }
 
@@ -109,6 +150,15 @@ class _StartupSequenceState extends State<StartupSequence> {
     };
   }
 
+  void _openAccountFlow(bool registration) {
+    setState(() {
+      _returnToGuest = _showGuestStore;
+      _showGuestStore = false;
+      _showAccountAccess = true;
+      _openRegistration = registration;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -119,6 +169,7 @@ class _StartupSequenceState extends State<StartupSequence> {
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
+        backgroundColor: _sky,
         body: Stack(
           children: [
             Positioned.fill(
@@ -658,17 +709,19 @@ class _OnboardingButton extends StatelessWidget {
 class ShopperAccountFlow extends StatefulWidget {
   const ShopperAccountFlow({
     required this.onBackToOnboarding,
+    this.initiallyShowRegistration = false,
     super.key,
   });
 
   final VoidCallback onBackToOnboarding;
+  final bool initiallyShowRegistration;
 
   @override
   State<ShopperAccountFlow> createState() => _ShopperAccountFlowState();
 }
 
 class _ShopperAccountFlowState extends State<ShopperAccountFlow> {
-  bool _showRegistration = false;
+  late bool _showRegistration = widget.initiallyShowRegistration;
 
   @override
   Widget build(BuildContext context) {
@@ -724,7 +777,7 @@ class _ShopperSignInPageState extends State<_ShopperSignInPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _hidePassword = true;
-  bool _rememberMe = false;
+  bool _rememberMe = true;
   bool _isSubmitting = false;
 
   @override
@@ -737,10 +790,37 @@ class _ShopperSignInPageState extends State<_ShopperSignInPage> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    _showAuthUnavailable(context, 'Sign-in', formValidated: true);
+    final email = _emailController.text.trim();
+    try {
+      await Session.instance.login(
+        email,
+        _passwordController.text,
+        remember: _rememberMe,
+      );
+      // Success: the app root swaps to the shop by itself.
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      final notVerified = e.message.toLowerCase().contains('not verified');
+      _showAuthError(
+        context,
+        e.message,
+        actionLabel: notVerified ? 'Verify' : null,
+        onAction: notVerified
+            ? () async {
+                final navigator = Navigator.of(context);
+                try {
+                  await ShopApi.resendCode(email);
+                } catch (_) {}
+                navigator.push(
+                  MaterialPageRoute<bool>(
+                    builder: (_) => VerifyOtpScreen(email: email),
+                  ),
+                );
+              }
+            : null,
+      );
+    }
   }
 
   @override
@@ -800,15 +880,13 @@ class _ShopperSignInPageState extends State<_ShopperSignInPage> {
                         Checkbox.adaptive(
                           value: _rememberMe,
                           visualDensity: VisualDensity.compact,
-                          onChanged: (value) => setState(
-                            () => _rememberMe = value ?? false,
-                          ),
+                          onChanged: (value) =>
+                              setState(() => _rememberMe = value ?? false),
                         ),
                         Flexible(
                           child: InkWell(
-                            onTap: () => setState(
-                              () => _rememberMe = !_rememberMe,
-                            ),
+                            onTap: () =>
+                                setState(() => _rememberMe = !_rememberMe),
                             child: const Text(
                               'Remember me',
                               style: TextStyle(fontSize: 12),
@@ -819,9 +897,12 @@ class _ShopperSignInPageState extends State<_ShopperSignInPage> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => _showAuthUnavailable(
-                      context,
-                      'Password recovery',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ForgotPasswordScreen(
+                          initialEmail: _emailController.text.trim(),
+                        ),
+                      ),
                     ),
                     child: const Text(
                       'Forgot password?',
@@ -838,41 +919,6 @@ class _ShopperSignInPageState extends State<_ShopperSignInPage> {
               ),
             ],
           ),
-        ),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _OrContinueDivider(),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _SocialAccountButton(
-                    label: 'Google',
-                    leading: const Text(
-                      'G',
-                      style: TextStyle(
-                        color: Color(0xFF4285F4),
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    onPressed: () =>
-                        _showAuthUnavailable(context, 'Google sign-in'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _SocialAccountButton(
-                    label: 'Apple',
-                    leading: const Icon(Icons.phone_iphone_rounded, size: 19),
-                    onPressed: () =>
-                        _showAuthUnavailable(context, 'Apple sign-in'),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
         Center(
           child: Wrap(
@@ -921,6 +967,8 @@ class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmationController = TextEditingController();
+  final _phoneController = TextEditingController();
+  DateTime? _dob;
   bool _hidePassword = true;
   bool _hideConfirmation = true;
   bool _isSubmitting = false;
@@ -931,16 +979,55 @@ class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmationController.dispose();
+    _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickDob() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dob ?? DateTime(2000),
+      firstDate: DateTime(1920),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _dob = picked);
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_dob == null) {
+      _showAuthError(context, 'Choose your date of birth.');
+      return;
+    }
     setState(() => _isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    _showAuthUnavailable(context, 'Account creation', formValidated: true);
+    final email = _emailController.text.trim();
+    try {
+      await ShopApi.register(
+        name: _nameController.text.trim(),
+        email: email,
+        password: _passwordController.text,
+        dob: _dob!,
+        phone: _phoneController.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      final verified = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => VerifyOtpScreen(email: email)),
+      );
+      if (!mounted) return;
+      if (verified == true) {
+        _showAuthError(
+          context,
+          'Account verified. Please log in.',
+          isError: false,
+        );
+        widget.onSignIn();
+      }
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      _showAuthError(context, e.message);
+    }
   }
 
   @override
@@ -982,6 +1069,37 @@ class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
               ),
               const SizedBox(height: 10),
               TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                decoration: _accountInputDecoration(
+                  'Phone Number',
+                  Icons.phone_outlined,
+                ),
+                validator: (value) => value == null || value.trim().length < 7
+                    ? 'Enter your phone number.'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              InkWell(
+                onTap: _pickDob,
+                borderRadius: BorderRadius.circular(14),
+                child: InputDecorator(
+                  decoration: _accountInputDecoration('', Icons.cake_outlined),
+                  child: Text(
+                    _dob == null ? 'Date of Birth' : formatDate(_dob),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _dob == null
+                          ? const Color(0xFF7890A8)
+                          : const Color(0xFF384D62),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
                 controller: _passwordController,
                 obscureText: _hidePassword,
                 textInputAction: TextInputAction.next,
@@ -1000,15 +1118,7 @@ class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
                     ),
                   ),
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Enter a password.';
-                  }
-                  if (value.length < 8) {
-                    return 'Use at least 8 characters.';
-                  }
-                  return null;
-                },
+                validator: validateStrongPassword,
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -1024,9 +1134,8 @@ class _ShopperRegistrationPageState extends State<_ShopperRegistrationPage> {
                     tooltip: _hideConfirmation
                         ? 'Show confirmation password'
                         : 'Hide confirmation password',
-                    onPressed: () => setState(
-                      () => _hideConfirmation = !_hideConfirmation,
-                    ),
+                    onPressed: () =>
+                        setState(() => _hideConfirmation = !_hideConfirmation),
                     icon: Icon(
                       _hideConfirmation
                           ? Icons.visibility_outlined
@@ -1105,9 +1214,7 @@ class _AccountPageLayout extends StatelessWidget {
         final logoWidth = useCompactLayout
             ? math.min(pageWidth * 0.46, constraints.maxHeight * 0.2)
             : 124.0;
-        final headerHeight = useCompactLayout
-            ? logoWidth * 0.92
-            : 100.0;
+        final headerHeight = useCompactLayout ? logoWidth * 0.92 : 100.0;
         final sectionGap = useCompactLayout
             ? math.min(constraints.maxHeight * 0.035, 28.0)
             : 0.0;
@@ -1174,7 +1281,11 @@ class _AccountPageLayout extends StatelessWidget {
                           ],
                         ),
                         if (useCompactLayout) SizedBox(height: sectionGap),
-                        for (var index = 0; index < children.length; index++) ...[
+                        for (
+                          var index = 0;
+                          index < children.length;
+                          index++
+                        ) ...[
                           if (useCompactLayout && index > 0)
                             SizedBox(height: sectionGap),
                           children[index],
@@ -1286,67 +1397,29 @@ class _AccountActionButton extends StatelessWidget {
   }
 }
 
-class _SocialAccountButton extends StatelessWidget {
-  const _SocialAccountButton({
-    required this.label,
-    required this.leading,
-    required this.onPressed,
-  });
-
-  final String label;
-  final Widget leading;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: leading,
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF384D62),
-        side: const BorderSide(color: Color(0xFFD6E3EF)),
-        minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-}
-
-class _OrContinueDivider extends StatelessWidget {
-  const _OrContinueDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: Color(0xFFE4EBF2))),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text(
-            'Or continue with',
-            style: TextStyle(color: Colors.blueGrey.shade400, fontSize: 11),
-          ),
-        ),
-        const Expanded(child: Divider(color: Color(0xFFE4EBF2))),
-      ],
-    );
-  }
-}
-
-void _showAuthUnavailable(
+void _showAuthError(
   BuildContext context,
-  String action, {
-  bool formValidated = false,
+  String message, {
+  bool isError = true,
+  String? actionLabel,
+  VoidCallback? onAction,
 }) {
-  final message = formValidated
-      ? 'Form is valid, but $action is not connected yet. Your information was not sent.'
-      : '$action is not connected yet. Your information was not sent.';
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
         content: Text(message),
+        backgroundColor: isError
+            ? const Color(0xFFB3261E)
+            : const Color(0xFF0751A5),
+        behavior: SnackBarBehavior.floating,
+        action: actionLabel == null
+            ? null
+            : SnackBarAction(
+                label: actionLabel,
+                textColor: Colors.white,
+                onPressed: onAction ?? () {},
+              ),
       ),
     );
 }
