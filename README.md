@@ -33,16 +33,6 @@ Administrators can:
 - Flutter
 - Dart
 
-### Backend
-
-- Java
-- Spring Boot
-- REST API
-
-### Database
-
-- MySQL
-
 ## Project Structure
 
 ```text
@@ -50,11 +40,13 @@ BabyShopHub/
 ├── android/
 ├── ios/
 ├── lib/
+├── linux/
+├── macos/
 ├── test/
-├── backend/
-├── database/
+├── web/
+├── windows/
+├── assets/
 ├── docs/
-├── screenshots/
 ├── pubspec.yaml
 ├── README.md
-└── .gitignore
+└── analysis_options.yaml
