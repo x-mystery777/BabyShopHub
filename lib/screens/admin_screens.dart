@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../core/app_colors.dart';
 import '../core/format.dart';
@@ -422,6 +425,7 @@ class AdminProductFormScreen extends StatefulWidget {
 
 class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final _form = GlobalKey<FormState>();
+  final _picker = ImagePicker();
   late final _name = TextEditingController(text: widget.product?.name ?? '');
   late final _desc = TextEditingController(
     text: widget.product?.description ?? '',
@@ -436,6 +440,8 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   );
   late int? _categoryId = widget.product?.categoryId;
   late int? _brandId = widget.product?.brandId;
+  Uint8List? _imageBytes;
+  String? _imageName;
   late final Future<(List<Category>, List<Brand>)> _lookups = (
     ShopApi.categories(),
     ShopApi.brands(),
@@ -448,6 +454,25 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1200,
+        maxHeight: 1200,
+      );
+      if (file == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      setState(() {
+        _imageBytes = bytes;
+        _imageName = file.name;
+      });
+    } catch (error) {
+      if (mounted) showMessage(context, error.toString(), error: true);
+    }
   }
 
   Future<void> _save() async {
@@ -468,6 +493,8 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
           stock: stock,
           categoryId: _categoryId!,
           brandId: _brandId!,
+          imageBytes: _imageBytes,
+          imageName: _imageName,
         );
       } else {
         await ShopApi.updateProduct(
@@ -479,6 +506,13 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
           categoryId: _categoryId!,
           brandId: _brandId!,
         );
+        if (_imageBytes != null) {
+          await ShopApi.replaceProductImage(
+            widget.product!.id,
+            _imageBytes!,
+            _imageName ?? 'product-image.jpg',
+          );
+        }
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -514,6 +548,40 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                Center(
+                  child: Column(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: _imageBytes == null
+                            ? ProductImage(
+                                widget.product?.imageUrl,
+                                size: 144,
+                                iconSize: 42,
+                              )
+                            : Image.memory(
+                                _imageBytes!,
+                                width: 144,
+                                height: 144,
+                                fit: BoxFit.cover,
+                              ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.add_photo_alternate_outlined),
+                        label: Text(
+                          _imageBytes != null ||
+                                  (widget.product?.imageUrl?.isNotEmpty ??
+                                      false)
+                              ? 'Change product image'
+                              : 'Add product image',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _name,
                   decoration: fieldDecoration('Product name'),

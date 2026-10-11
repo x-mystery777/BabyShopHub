@@ -21,43 +21,45 @@ class ShopApi {
     required String password,
     required DateTime dob,
     required String phone,
-  }) async =>
-      _text(
-          await _c.post('/auth/register', {
-            'name': name,
-            'email': email,
-            'password': password,
-            'dob': isoDate(dob),
-            'phoneNumber': phone,
-          }),
-          'Registration successful. Check your email for the code.');
+  }) async => _text(
+    await _c.post('/auth/register', {
+      'name': name,
+      'email': email,
+      'password': password,
+      'dob': isoDate(dob),
+      'phoneNumber': phone,
+    }),
+    'Registration successful. Check your email for the code.',
+  );
 
   static Future<String> verify(String email, String code) async => _text(
-      await _c.post(
-          '/auth/verify', {'email': email, 'verificationCode': code}),
-      'Email verified. You can now log in.');
+    await _c.post('/auth/verify', {'email': email, 'verificationCode': code}),
+    'Email verified. You can now log in.',
+  );
 
   static Future<String> resendCode(String email) async => _text(
-      await _c.post('/auth/resend-otp', {'email': email}),
-      'A new code has been sent.');
+    await _c.post('/auth/resend-otp', {'email': email}),
+    'A new code has been sent.',
+  );
 
   static Future<String> forgotPassword(String email) async => _text(
-      await _c.post('/auth/forgot-password', {'email': email}),
-      'A reset code has been sent to your email.');
+    await _c.post('/auth/forgot-password', {'email': email}),
+    'A reset code has been sent to your email.',
+  );
 
   static Future<String> resetPassword({
     required String email,
     required String code,
     required String password,
-  }) async =>
-      _text(
-          await _c.post('/auth/reset-password', {
-            'email': email,
-            'resetCode': code,
-            'newPassword': password,
-            'confirmPassword': password,
-          }),
-          'Password reset. You can now log in.');
+  }) async => _text(
+    await _c.post('/auth/reset-password', {
+      'email': email,
+      'resetCode': code,
+      'newPassword': password,
+      'confirmPassword': password,
+    }),
+    'Password reset. You can now log in.',
+  );
 
   // ---------- catalog ----------
   static Future<List<Category>> categories() async =>
@@ -95,20 +97,29 @@ class ShopApi {
       _list(await _c.get('/products/$productId/reviews'), Review.fromJson);
 
   static Future<void> addReview(int productId, int rating, String comment) =>
-      _c.post('/products/$productId/reviews',
-          {'rating': rating, 'comment': comment});
+      _c.post('/products/$productId/reviews', {
+        'rating': rating,
+        'comment': comment,
+      });
 
   // ---------- cart ----------
   static Future<Cart> cart() async =>
       Cart.fromJson(await _c.get('/cart') as Map<String, dynamic>);
 
   static Future<Cart> addToCart(int productId, int quantity) async =>
-      Cart.fromJson(await _c.post('/cart/items',
-          {'productId': productId, 'quantity': quantity}) as Map<String, dynamic>);
+      Cart.fromJson(
+        await _c.post('/cart/items', {
+              'productId': productId,
+              'quantity': quantity,
+            })
+            as Map<String, dynamic>,
+      );
 
   static Future<Cart> updateCart(int productId, int quantity) async =>
-      Cart.fromJson(await _c.patch(
-          '/cart/items/$productId', {'quantity': quantity}) as Map<String, dynamic>);
+      Cart.fromJson(
+        await _c.patch('/cart/items/$productId', {'quantity': quantity})
+            as Map<String, dynamic>,
+      );
 
   static Future<void> removeFromCart(int productId) =>
       _c.delete('/cart/items/$productId');
@@ -116,7 +127,9 @@ class ShopApi {
   // ---------- orders ----------
   static Future<OrderModel> checkout(int addressId) async =>
       OrderModel.fromJson(
-          await _c.post('/orders', {'addressId': addressId}) as Map<String, dynamic>);
+        await _c.post('/orders', {'addressId': addressId})
+            as Map<String, dynamic>,
+      );
 
   static Future<List<OrderModel>> myOrders() async =>
       _list(await _c.get('/orders/me'), OrderModel.fromJson);
@@ -129,27 +142,36 @@ class ShopApi {
 
   // ---------- account ----------
   static Future<Profile> profile() async => Profile.fromJson(
-      await _c.get('/account/profile') as Map<String, dynamic>);
+    await _c.get('/account/profile') as Map<String, dynamic>,
+  );
 
-  static Future<void> updateProfile(
-          String name, String phone, DateTime dob) =>
-      _c.put('/account/profile',
-          {'name': name, 'phoneNumber': phone, 'dob': isoDate(dob)});
+  static Future<void> uploadProfileImage(Uint8List bytes, String fileName) =>
+      _c.uploadFile('/account/profile/image', bytes: bytes, fileName: fileName);
+
+  static Future<void> updateProfile(String name, String phone, DateTime dob) =>
+      _c.put('/account/profile', {
+        'name': name,
+        'phoneNumber': phone,
+        'dob': isoDate(dob),
+      });
 
   static Future<String> changePassword(String current, String next) async =>
       _text(
-          await _c.post('/account/change-password', {
-            'currentPassword': current,
-            'newPassword': next,
-            'confirmPassword': next,
-          }),
-          'Password changed.');
+        await _c.post('/account/change-password', {
+          'currentPassword': current,
+          'newPassword': next,
+          'confirmPassword': next,
+        }),
+        'Password changed.',
+      );
 
   static Future<List<Address>> addresses() async =>
       _list(await _c.get('/account/addresses'), Address.fromJson);
 
-  static Map<String, dynamic> _addressBody(Map<String, dynamic> a) =>
-      {...a, 'isDefault': a['default']}; // send both spellings
+  static Map<String, dynamic> _addressBody(Map<String, dynamic> a) => {
+    ...a,
+    'isDefault': a['default'],
+  }; // send both spellings
 
   static Future<void> addAddress(Map<String, dynamic> body) =>
       _c.post('/account/addresses', _addressBody(body));
@@ -171,7 +193,7 @@ class ShopApi {
   static Future<List<Product>> adminProducts() async =>
       _list(await _c.get('/admin/products'), Product.fromJson);
 
-    static Future<void> createProduct({
+  static Future<void> createProduct({
     required String name,
     required String description,
     required double price,
@@ -180,26 +202,32 @@ class ShopApi {
     required int brandId,
     Uint8List? imageBytes,
     String? imageName,
-  }) =>
-      _c.postMultipart(
-        '/admin/products',
-        fields: {'categoryId': '$categoryId', 'brandId': '$brandId'},
-        partName: 'product',
-        partJson: {
-          'name': name,
-          'description': description,
-          'price': price,
-          'stockQty': stock,
-          'imageUrls': <String>[],
-        },
-        fileBytes: imageBytes,
-        fileName: imageName,
-      );
+  }) => _c.postMultipart(
+    '/admin/products',
+    fields: const {},
+    query: {'categoryId': '$categoryId', 'brandId': '$brandId'},
+    partName: 'product',
+    partJson: {
+      'name': name,
+      'description': description,
+      'price': price,
+      'stockQty': stock,
+      'imageUrls': <String>[],
+    },
+    fileBytes: imageBytes,
+    fileName: imageName,
+  );
 
   static Future<void> replaceProductImage(
-          int id, Uint8List bytes, String fileName) =>
-      _c.uploadFile('/admin/products/$id/image',
-          bytes: bytes, fileName: fileName);
+    int id,
+    Uint8List bytes,
+    String fileName,
+  ) => _c.uploadFile(
+    '/admin/products/$id/images',
+    bytes: bytes,
+    fileName: fileName,
+    fieldName: 'images',
+  );
 
   static Future<void> updateProduct(
     int id, {
@@ -209,15 +237,14 @@ class ShopApi {
     required int stock,
     required int categoryId,
     required int brandId,
-  }) =>
-      _c.put('/admin/products/$id', {
-        'name': name,
-        'description': description,
-        'price': price,
-        'stockQty': stock,
-        'categoryId': categoryId,
-        'brandId': brandId,
-      });
+  }) => _c.put('/admin/products/$id', {
+    'name': name,
+    'description': description,
+    'price': price,
+    'stockQty': stock,
+    'categoryId': categoryId,
+    'brandId': brandId,
+  });
 
   static Future<void> deactivateProduct(int id) =>
       _c.delete('/admin/products/$id');
@@ -245,6 +272,8 @@ class ShopApi {
       _list(await _c.get('/admin/support'), Ticket.fromJson);
 
   static Future<void> setTicketStatus(int id, String status, String reply) =>
-      _c.patch('/admin/support/$id/status',
-          {'status': status, 'adminResponse': reply});
+      _c.patch('/admin/support/$id/status', {
+        'status': status,
+        'adminResponse': reply,
+      });
 }

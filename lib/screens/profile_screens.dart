@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/app_colors.dart';
@@ -21,62 +25,69 @@ class ProfileScreen extends StatelessWidget {
     return AsyncView<Profile>(
       load: ShopApi.profile,
       builder: (context, p, reload) {
-        Widget tile(IconData icon, String label, VoidCallback onTap,
-                {Color? color}) =>
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: SoftCard(
-                onTap: onTap,
-                child: Row(
-                  children: [
-                    Icon(icon, color: color ?? AppColors.blue),
-                    const SizedBox(width: 14),
-                    Expanded(
-                        child: Text(label,
-                            style: TextStyle(
-                                color: color ?? AppColors.navy,
-                                fontWeight: FontWeight.w600))),
-                    const Icon(Icons.chevron_right, color: AppColors.hint),
-                  ],
+        Widget tile(
+          IconData icon,
+          String label,
+          VoidCallback onTap, {
+          Color? color,
+        }) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: SoftCard(
+            onTap: onTap,
+            child: Row(
+              children: [
+                Icon(icon, color: color ?? AppColors.blue),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: color ?? AppColors.navy,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
-            );
+                const Icon(Icons.chevron_right, color: AppColors.hint),
+              ],
+            ),
+          ),
+        );
 
         return ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(20),
           children: [
             const Center(
-              child: Text('My Profile',
-                  style: TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700)),
+              child: Text(
+                'My Profile',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             Row(
               children: [
-                CircleAvatar(
-                  radius: 32,
-                  backgroundColor: AppColors.blueTint,
-                  child: Text(p.name.isEmpty ? '?' : p.name[0].toUpperCase(),
-                      style: const TextStyle(
-                          color: AppColors.blue,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800)),
-                ),
+                _ProfilePicture(email: p.email, name: p.name),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(p.name,
-                          style: const TextStyle(
-                              color: AppColors.navy,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800)),
-                      Text(p.email,
-                          style: const TextStyle(color: AppColors.slate)),
+                      Text(
+                        p.name,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        p.email,
+                        style: const TextStyle(color: AppColors.slate),
+                      ),
                     ],
                   ),
                 ),
@@ -87,29 +98,152 @@ class ProfileScreen extends StatelessWidget {
               await pushPage(context, PersonalInfoScreen(profile: p));
               reload();
             }),
-            tile(Icons.location_on_outlined, 'Delivery Addresses',
-                () => pushPage(context, const AddressesScreen())),
-            tile(Icons.credit_card_outlined, 'Payment Methods',
-                () => pushPage(context, const PaymentMethodsScreen())),
-            tile(Icons.receipt_long_outlined, 'Order History',
-                () => MainShell.goTo(context, 3)),
-            tile(Icons.lock_outline, 'Change Password',
-                () => pushPage(context, const ChangePasswordScreen())),
-            tile(Icons.help_outline, 'Help & Support',
-                () => pushPage(context, const HelpSupportScreen())),
+            tile(
+              Icons.location_on_outlined,
+              'Delivery Addresses',
+              () => pushPage(context, const AddressesScreen()),
+            ),
+            tile(
+              Icons.credit_card_outlined,
+              'Payment Methods',
+              () => pushPage(context, const PaymentMethodsScreen()),
+            ),
+            tile(
+              Icons.receipt_long_outlined,
+              'Order History',
+              () => MainShell.goTo(context, 3),
+            ),
+            tile(
+              Icons.lock_outline,
+              'Change Password',
+              () => pushPage(context, const ChangePasswordScreen()),
+            ),
+            tile(
+              Icons.help_outline,
+              'Help & Support',
+              () => pushPage(context, const HelpSupportScreen()),
+            ),
             if (Session.instance.isAdmin)
-              tile(Icons.admin_panel_settings_outlined, 'Admin Panel',
-                  () => pushPage(context, const AdminDashboardScreen())),
+              tile(
+                Icons.admin_panel_settings_outlined,
+                'Admin Panel',
+                () => pushPage(context, const AdminDashboardScreen()),
+              ),
             tile(Icons.logout, 'Log Out', () async {
               if (await confirmDialog(
-                  context, 'Log out', 'Do you want to log out?',
-                  confirm: 'Log out')) {
+                context,
+                'Log out',
+                'Do you want to log out?',
+                confirm: 'Log out',
+              )) {
                 await Session.instance.logout();
               }
             }, color: AppColors.error),
           ],
         );
       },
+    );
+  }
+}
+
+class _ProfilePicture extends StatefulWidget {
+  const _ProfilePicture({required this.email, required this.name});
+
+  final String email;
+  final String name;
+
+  @override
+  State<_ProfilePicture> createState() => _ProfilePictureState();
+}
+
+class _ProfilePictureState extends State<_ProfilePicture> {
+  final _picker = ImagePicker();
+  Uint8List? _imageBytes;
+
+  String get _storageKey =>
+      'profile_picture_${base64Url.encode(utf8.encode(widget.email.trim().toLowerCase()))}';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPicture();
+  }
+
+  Future<void> _loadPicture() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final saved = preferences.getString(_storageKey);
+      if (saved != null && mounted) {
+        setState(() => _imageBytes = base64Decode(saved));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _pickPicture() async {
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 512,
+        maxHeight: 512,
+      );
+      if (file == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      await ShopApi.uploadProfileImage(bytes, file.name);
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(_storageKey, base64Encode(bytes));
+      if (mounted) setState(() => _imageBytes = bytes);
+    } catch (error) {
+      if (mounted) showMessage(context, error.toString(), error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 72,
+      height: 72,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CircleAvatar(
+            radius: 32,
+            backgroundColor: AppColors.blueTint,
+            backgroundImage: _imageBytes == null
+                ? null
+                : MemoryImage(_imageBytes!),
+            child: _imageBytes == null
+                ? Text(
+                    widget.name.isEmpty ? '?' : widget.name[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: AppColors.blue,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  )
+                : null,
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Material(
+              color: AppColors.blue,
+              shape: const CircleBorder(),
+              child: IconButton(
+                tooltip: 'Change profile picture',
+                onPressed: _pickPicture,
+                icon: const Icon(Icons.photo_camera_outlined, size: 17),
+                color: Colors.white,
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
+                ),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -125,8 +259,9 @@ class PersonalInfoScreen extends StatefulWidget {
 class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
   final _form = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.profile.name);
-  late final _phone =
-      TextEditingController(text: widget.profile.phoneNumber ?? '');
+  late final _phone = TextEditingController(
+    text: widget.profile.phoneNumber ?? '',
+  );
   late DateTime? _dob = widget.profile.dob;
   bool _saving = false;
 
@@ -185,7 +320,10 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
             TextFormField(
               controller: _name,
               textCapitalization: TextCapitalization.words,
-              decoration: fieldDecoration('Full name', icon: Icons.person_outline),
+              decoration: fieldDecoration(
+                'Full name',
+                icon: Icons.person_outline,
+              ),
               validator: (v) =>
                   v == null || v.trim().isEmpty ? 'Enter your name.' : null,
             ),
@@ -193,25 +331,37 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
             TextFormField(
               controller: _phone,
               keyboardType: TextInputType.phone,
-              decoration: fieldDecoration('Phone number', icon: Icons.phone_outlined),
-              validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Enter your phone number.' : null,
+              decoration: fieldDecoration(
+                'Phone number',
+                icon: Icons.phone_outlined,
+              ),
+              validator: (v) => v == null || v.trim().isEmpty
+                  ? 'Enter your phone number.'
+                  : null,
             ),
             const SizedBox(height: 12),
             InkWell(
               onTap: _pickDob,
               borderRadius: BorderRadius.circular(14),
               child: InputDecorator(
-                decoration:
-                    fieldDecoration('Date of birth', icon: Icons.cake_outlined),
+                decoration: fieldDecoration(
+                  'Date of birth',
+                  icon: Icons.cake_outlined,
+                ),
                 child: Text(
-                    _dob == null ? 'Choose date of birth' : formatDate(_dob),
-                    style: TextStyle(
-                        color: _dob == null ? AppColors.hint : AppColors.ink)),
+                  _dob == null ? 'Choose date of birth' : formatDate(_dob),
+                  style: TextStyle(
+                    color: _dob == null ? AppColors.hint : AppColors.ink,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 24),
-            PrimaryButton(label: 'Save Changes', loading: _saving, onPressed: _save),
+            PrimaryButton(
+              label: 'Save Changes',
+              loading: _saving,
+              onPressed: _save,
+            ),
           ],
         ),
       ),
@@ -250,11 +400,15 @@ class _AddressesScreenState extends State<AddressesScreen> {
         load: ShopApi.addresses,
         builder: (context, list, reload) {
           if (list.isEmpty) {
-            return ListView(children: const [
-              SizedBox(height: 80),
-              EmptyView('No saved addresses yet.',
-                  icon: Icons.location_off_outlined),
-            ]);
+            return ListView(
+              children: const [
+                SizedBox(height: 80),
+                EmptyView(
+                  'No saved addresses yet.',
+                  icon: Icons.location_off_outlined,
+                ),
+              ],
+            );
           }
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -266,39 +420,55 @@ class _AddressesScreenState extends State<AddressesScreen> {
               return SoftCard(
                 child: Row(
                   children: [
-                    const Icon(Icons.location_on_outlined, color: AppColors.blue),
+                    const Icon(
+                      Icons.location_on_outlined,
+                      color: AppColors.blue,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(children: [
-                            Text(
+                          Row(
+                            children: [
+                              Text(
                                 (a.label ?? '').isEmpty ? 'Address' : a.label!,
                                 style: const TextStyle(
-                                    color: AppColors.navy,
-                                    fontWeight: FontWeight.w700)),
-                            if (a.isDefault) ...[
-                              const SizedBox(width: 8),
-                              const StatusChip('PAID', label: 'Default'),
+                                  color: AppColors.navy,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (a.isDefault) ...[
+                                const SizedBox(width: 8),
+                                const StatusChip('PAID', label: 'Default'),
+                              ],
                             ],
-                          ]),
+                          ),
                           const SizedBox(height: 2),
-                          Text(a.oneLine,
-                              style: const TextStyle(color: AppColors.slate)),
+                          Text(
+                            a.oneLine,
+                            style: const TextStyle(color: AppColors.slate),
+                          ),
                         ],
                       ),
                     ),
                     IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 20),
-                        onPressed: () => _open(a)),
+                      icon: const Icon(Icons.edit_outlined, size: 20),
+                      onPressed: () => _open(a),
+                    ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline,
-                          size: 20, color: AppColors.error),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: AppColors.error,
+                      ),
                       onPressed: () async {
-                        if (!await confirmDialog(context, 'Delete address',
-                            'Remove this address?',
-                            confirm: 'Delete')) {
+                        if (!await confirmDialog(
+                          context,
+                          'Delete address',
+                          'Remove this address?',
+                          confirm: 'Delete',
+                        )) {
                           return;
                         }
                         try {
@@ -337,10 +507,12 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
   late final _line1 = TextEditingController(text: widget.address?.line1 ?? '');
   late final _city = TextEditingController(text: widget.address?.city ?? '');
   late final _state = TextEditingController(text: widget.address?.state ?? '');
-  late final _country =
-      TextEditingController(text: widget.address?.country ?? 'Nigeria');
-  late final _postal =
-      TextEditingController(text: widget.address?.postalCode ?? '');
+  late final _country = TextEditingController(
+    text: widget.address?.country ?? 'Nigeria',
+  );
+  late final _postal = TextEditingController(
+    text: widget.address?.postalCode ?? '',
+  );
   late bool _default = widget.address?.isDefault ?? false;
   bool _saving = false;
 
@@ -386,38 +558,46 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: Text(widget.address == null ? 'Add Address' : 'Edit Address')),
+        title: Text(widget.address == null ? 'Add Address' : 'Edit Address'),
+      ),
       body: Form(
         key: _form,
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             TextFormField(
-                controller: _label,
-                decoration: fieldDecoration('Label (Home, Office...)')),
+              controller: _label,
+              decoration: fieldDecoration('Label (Home, Office...)'),
+            ),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _line1,
-                decoration: fieldDecoration('Street address'),
-                validator: _required),
+              controller: _line1,
+              decoration: fieldDecoration('Street address'),
+              validator: _required,
+            ),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _city,
-                decoration: fieldDecoration('City'),
-                validator: _required),
+              controller: _city,
+              decoration: fieldDecoration('City'),
+              validator: _required,
+            ),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _state, decoration: fieldDecoration('State')),
+              controller: _state,
+              decoration: fieldDecoration('State'),
+            ),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _country,
-                decoration: fieldDecoration('Country'),
-                validator: _required),
+              controller: _country,
+              decoration: fieldDecoration('Country'),
+              validator: _required,
+            ),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _postal,
-                keyboardType: TextInputType.number,
-                decoration: fieldDecoration('Postal code')),
+              controller: _postal,
+              keyboardType: TextInputType.number,
+              decoration: fieldDecoration('Postal code'),
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Make this my default address'),
@@ -426,7 +606,11 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
               onChanged: (v) => setState(() => _default = v),
             ),
             const SizedBox(height: 12),
-            PrimaryButton(label: 'Save Address', loading: _saving, onPressed: _save),
+            PrimaryButton(
+              label: 'Save Address',
+              loading: _saving,
+              onPressed: _save,
+            ),
           ],
         ),
       ),
@@ -469,8 +653,10 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text('Choose the method you want selected by default at checkout.',
-              style: TextStyle(color: AppColors.slate)),
+          const Text(
+            'Choose the method you want selected by default at checkout.',
+            style: TextStyle(color: AppColors.slate),
+          ),
           const SizedBox(height: 14),
           for (final m in paymentMethods)
             Padding(
@@ -480,31 +666,38 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 child: Row(
                   children: [
                     Icon(
-                        m.startsWith('Card')
-                            ? Icons.credit_card
-                            : m.startsWith('Cash')
-                                ? Icons.payments_outlined
-                                : Icons.account_balance_wallet_outlined,
-                        color: AppColors.blue),
+                      m.startsWith('Card')
+                          ? Icons.credit_card
+                          : m.startsWith('Cash')
+                          ? Icons.payments_outlined
+                          : Icons.account_balance_wallet_outlined,
+                      color: AppColors.blue,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
-                        child: Text(m,
-                            style: const TextStyle(
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w600))),
+                      child: Text(
+                        m,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                     Icon(
-                        _selected == m
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_off,
-                        color: AppColors.blue),
+                      _selected == m
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      color: AppColors.blue,
+                    ),
                   ],
                 ),
               ),
             ),
           const SizedBox(height: 8),
           const Text(
-              'BabyShopHub uses a simulated payment. No card numbers are collected or stored.',
-              style: TextStyle(color: AppColors.hint, fontSize: 12)),
+            'BabyShopHub uses a simulated payment. No card numbers are collected or stored.',
+            style: TextStyle(color: AppColors.hint, fontSize: 12),
+          ),
         ],
       ),
     );
@@ -561,27 +754,41 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             TextFormField(
               controller: _current,
               obscureText: true,
-              decoration: fieldDecoration('Current password', icon: Icons.lock_outline),
-              validator: (v) =>
-                  v == null || v.isEmpty ? 'Enter your current password.' : null,
+              decoration: fieldDecoration(
+                'Current password',
+                icon: Icons.lock_outline,
+              ),
+              validator: (v) => v == null || v.isEmpty
+                  ? 'Enter your current password.'
+                  : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _new,
               obscureText: true,
-              decoration: fieldDecoration('New password', icon: Icons.lock_reset),
+              decoration: fieldDecoration(
+                'New password',
+                icon: Icons.lock_reset,
+              ),
               validator: validateStrongPassword,
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _confirm,
               obscureText: true,
-              decoration: fieldDecoration('Confirm new password', icon: Icons.lock_reset),
+              decoration: fieldDecoration(
+                'Confirm new password',
+                icon: Icons.lock_reset,
+              ),
               validator: (v) =>
                   v != _new.text ? 'Passwords do not match.' : null,
             ),
             const SizedBox(height: 24),
-            PrimaryButton(label: 'Update Password', loading: _saving, onPressed: _save),
+            PrimaryButton(
+              label: 'Update Password',
+              loading: _saving,
+              onPressed: _save,
+            ),
           ],
         ),
       ),
