@@ -113,7 +113,7 @@ class _CartScreenState extends State<CartScreen> {
   Widget _line(CartLine l) => SoftCard(
         child: Row(
           children: [
-            const ProductImage(null, size: 64, iconSize: 30),
+            ProductImage(l.imageUrl, size: 64, iconSize: 30),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

@@ -3,8 +3,14 @@ DateTime? _date(dynamic v) {
   if (v is String) return DateTime.tryParse(v);
   if (v is List && v.length >= 3) {
     final p = v.map((e) => (e as num).toInt()).toList();
-    return DateTime(p[0], p[1], p[2], p.length > 3 ? p[3] : 0,
-        p.length > 4 ? p[4] : 0, p.length > 5 ? p[5] : 0);
+    return DateTime(
+      p[0],
+      p[1],
+      p[2],
+      p.length > 3 ? p[3] : 0,
+      p.length > 4 ? p[4] : 0,
+      p.length > 5 ? p[5] : 0,
+    );
   }
   return null;
 }
@@ -18,10 +24,10 @@ class Category {
   final String? description;
 
   factory Category.fromJson(Map<String, dynamic> j) => Category(
-        id: j['categoryId'] as int,
-        name: j['name'] as String,
-        description: j['description'] as String?,
-      );
+    id: j['categoryId'] as int,
+    name: j['name'] as String,
+    description: j['description'] as String?,
+  );
 }
 
 class Brand {
@@ -66,20 +72,20 @@ class Product {
   String? get imageUrl => imageUrls.isEmpty ? null : imageUrls.first;
 
   factory Product.fromJson(Map<String, dynamic> j) => Product(
-        id: (j['productId'] as num).toInt(),
-        name: j['name'] as String,
-        description: j['description'] as String?,
-        price: _num(j['price']),
-        stockQty: (j['stockQty'] as num?)?.toInt() ?? 0,
-        active: j['active'] as bool? ?? true,
-        imageUrls: (j['imageUrls'] as List<dynamic>? ?? [])
-            .map((e) => e as String)
-            .toList(),
-        categoryId: (j['categoryId'] as num?)?.toInt() ?? 0,
-        categoryName: (j['categoryName'] as String?) ?? '',
-        brandId: (j['brandId'] as num?)?.toInt() ?? 0,
-        brandName: (j['brandName'] as String?) ?? '',
-      );
+    id: (j['productId'] as num).toInt(),
+    name: j['name'] as String,
+    description: j['description'] as String?,
+    price: _num(j['price']),
+    stockQty: (j['stockQty'] as num?)?.toInt() ?? 0,
+    active: j['active'] as bool? ?? true,
+    imageUrls: (j['imageUrls'] as List<dynamic>? ?? [])
+        .map((e) => e as String)
+        .toList(),
+    categoryId: (j['categoryId'] as num?)?.toInt() ?? 0,
+    categoryName: (j['categoryName'] as String?) ?? '',
+    brandId: (j['brandId'] as num?)?.toInt() ?? 0,
+    brandName: (j['brandName'] as String?) ?? '',
+  );
 }
 
 class CartLine {
@@ -89,20 +95,25 @@ class CartLine {
     required this.quantity,
     required this.unitPrice,
     required this.subtotal,
+    this.imageUrl,
   });
   final int productId;
   final String name;
   final int quantity;
   final double unitPrice;
   final double subtotal;
+  final String? imageUrl;
 
   factory CartLine.fromJson(Map<String, dynamic> j) => CartLine(
-        productId: (j['productId'] as num).toInt(),
-        name: j['name'] as String,
-        quantity: (j['quantity'] as num).toInt(),
-        unitPrice: _num(j['unitPrice']),
-        subtotal: _num(j['subtotal']),
-      );
+    productId: (j['productId'] as num).toInt(),
+    name: j['name'] as String,
+    quantity: (j['quantity'] as num).toInt(),
+    unitPrice: _num(j['unitPrice']),
+    subtotal: _num(j['subtotal']),
+    imageUrl:
+        (j['imageUrl'] as String?) ??
+        ((j['imageUrls'] as List<dynamic>?)?.firstOrNull as String?),
+  );
 }
 
 class Cart {
@@ -113,11 +124,11 @@ class Cart {
   int get count => items.fold(0, (sum, l) => sum + l.quantity);
 
   factory Cart.fromJson(Map<String, dynamic> j) => Cart(
-        items: (j['items'] as List<dynamic>? ?? [])
-            .map((e) => CartLine.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        total: _num(j['total']),
-      );
+    items: (j['items'] as List<dynamic>? ?? [])
+        .map((e) => CartLine.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    total: _num(j['total']),
+  );
 }
 
 class OrderModel {
@@ -141,16 +152,16 @@ class OrderModel {
   int get itemCount => items.fold(0, (sum, l) => sum + l.quantity);
 
   factory OrderModel.fromJson(Map<String, dynamic> j) => OrderModel(
-        id: (j['orderId'] as num).toInt(),
-        status: (j['orderStatus'] as String?) ?? 'CONFIRMED',
-        paymentStatus: (j['paymentStatus'] as String?) ?? '',
-        shippingAddress: (j['shippingAddress'] as String?) ?? '',
-        total: _num(j['totalAmount']),
-        createdAt: _date(j['createdAt']),
-        items: (j['items'] as List<dynamic>? ?? [])
-            .map((e) => CartLine.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    id: (j['orderId'] as num).toInt(),
+    status: (j['orderStatus'] as String?) ?? 'CONFIRMED',
+    paymentStatus: (j['paymentStatus'] as String?) ?? '',
+    shippingAddress: (j['shippingAddress'] as String?) ?? '',
+    total: _num(j['totalAmount']),
+    createdAt: _date(j['createdAt']),
+    items: (j['items'] as List<dynamic>? ?? [])
+        .map((e) => CartLine.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class TrackingEvent {
@@ -160,10 +171,10 @@ class TrackingEvent {
   final DateTime? createdAt;
 
   factory TrackingEvent.fromJson(Map<String, dynamic> j) => TrackingEvent(
-        status: (j['status'] as String?) ?? '',
-        note: j['note'] as String?,
-        createdAt: _date(j['createdAt']),
-      );
+    status: (j['status'] as String?) ?? '',
+    note: j['note'] as String?,
+    createdAt: _date(j['createdAt']),
+  );
 }
 
 class Review {
@@ -181,12 +192,12 @@ class Review {
   final DateTime? createdAt;
 
   factory Review.fromJson(Map<String, dynamic> j) => Review(
-        id: (j['reviewId'] as num).toInt(),
-        reviewer: (j['reviewer'] as String?) ?? 'Customer',
-        rating: (j['rating'] as num?)?.toInt() ?? 0,
-        comment: j['comment'] as String?,
-        createdAt: _date(j['createdAt']),
-      );
+    id: (j['reviewId'] as num).toInt(),
+    reviewer: (j['reviewer'] as String?) ?? 'Customer',
+    rating: (j['rating'] as num?)?.toInt() ?? 0,
+    comment: j['comment'] as String?,
+    createdAt: _date(j['createdAt']),
+  );
 }
 
 class Address {
@@ -209,20 +220,24 @@ class Address {
   final String? postalCode;
   final bool isDefault;
 
-  String get oneLine => [line1, city, state, country, postalCode]
-      .where((e) => e != null && e.isNotEmpty)
-      .join(', ');
+  String get oneLine => [
+    line1,
+    city,
+    state,
+    country,
+    postalCode,
+  ].where((e) => e != null && e.isNotEmpty).join(', ');
 
   factory Address.fromJson(Map<String, dynamic> j) => Address(
-        id: (j['addressId'] as num).toInt(),
-        label: j['label'] as String?,
-        line1: (j['line1'] as String?) ?? '',
-        city: (j['city'] as String?) ?? '',
-        state: j['state'] as String?,
-        country: (j['country'] as String?) ?? '',
-        postalCode: j['postalCode'] as String?,
-        isDefault: (j['isDefault'] ?? j['default'] ?? false) as bool,
-      );
+    id: (j['addressId'] as num).toInt(),
+    label: j['label'] as String?,
+    line1: (j['line1'] as String?) ?? '',
+    city: (j['city'] as String?) ?? '',
+    state: j['state'] as String?,
+    country: (j['country'] as String?) ?? '',
+    postalCode: j['postalCode'] as String?,
+    isDefault: (j['isDefault'] ?? j['default'] ?? false) as bool,
+  );
 }
 
 class Profile {
@@ -240,12 +255,12 @@ class Profile {
   final DateTime? dob;
 
   factory Profile.fromJson(Map<String, dynamic> j) => Profile(
-        id: (j['id'] as num).toInt(),
-        name: (j['name'] as String?) ?? '',
-        email: (j['email'] as String?) ?? '',
-        phoneNumber: j['phoneNumber'] as String?,
-        dob: _date(j['dob']),
-      );
+    id: (j['id'] as num).toInt(),
+    name: (j['name'] as String?) ?? '',
+    email: (j['email'] as String?) ?? '',
+    phoneNumber: j['phoneNumber'] as String?,
+    dob: _date(j['dob']),
+  );
 }
 
 class Ticket {
@@ -267,14 +282,14 @@ class Ticket {
   final DateTime? createdAt;
 
   factory Ticket.fromJson(Map<String, dynamic> j) => Ticket(
-        id: (j['ticketId'] as num).toInt(),
-        email: (j['requesterEmail'] as String?) ?? '',
-        subject: (j['subject'] as String?) ?? '',
-        message: (j['message'] as String?) ?? '',
-        status: (j['status'] as String?) ?? 'OPEN',
-        adminResponse: j['adminResponse'] as String?,
-        createdAt: _date(j['createdAt']),
-      );
+    id: (j['ticketId'] as num).toInt(),
+    email: (j['requesterEmail'] as String?) ?? '',
+    subject: (j['subject'] as String?) ?? '',
+    message: (j['message'] as String?) ?? '',
+    status: (j['status'] as String?) ?? 'OPEN',
+    adminResponse: j['adminResponse'] as String?,
+    createdAt: _date(j['createdAt']),
+  );
 }
 
 class AppUser {
@@ -298,12 +313,12 @@ class AppUser {
   bool get isAdmin => roles.contains('ROLE_ADMIN');
 
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
-        id: (j['id'] as num).toInt(),
-        name: (j['name'] as String?) ?? '',
-        email: (j['email'] as String?) ?? '',
-        phoneNumber: j['phoneNumber'] as String?,
-        enabled: j['enabled'] as bool? ?? false,
-        suspended: j['suspended'] as bool? ?? false,
-        roles: (j['roles'] as List<dynamic>? ?? []).map((e) => '$e').toList(),
-      );
+    id: (j['id'] as num).toInt(),
+    name: (j['name'] as String?) ?? '',
+    email: (j['email'] as String?) ?? '',
+    phoneNumber: j['phoneNumber'] as String?,
+    enabled: j['enabled'] as bool? ?? false,
+    suspended: j['suspended'] as bool? ?? false,
+    roles: (j['roles'] as List<dynamic>? ?? []).map((e) => '$e').toList(),
+  );
 }

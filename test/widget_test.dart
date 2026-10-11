@@ -7,15 +7,41 @@ import 'package:babyshophub/screens/cart_screens.dart';
 import 'package:babyshophub/screens/home_screen.dart';
 
 void main() {
-  testWidgets('BabyShopHub starts with its animated logo intro', (tester) async {
+  test('CartLine retains an optional product image URL', () {
+    final line = CartLine.fromJson({
+      'productId': 7,
+      'name': 'Baby bottle',
+      'quantity': 1,
+      'unitPrice': 1200,
+      'subtotal': 1200,
+      'imageUrl': 'https://example.com/bottle.jpg',
+    });
+
+    expect(line.imageUrl, 'https://example.com/bottle.jpg');
+    expect(
+      CartLine.fromJson({
+        'productId': 8,
+        'name': 'Rattle',
+        'quantity': 1,
+        'unitPrice': 500,
+        'subtotal': 500,
+      }).imageUrl,
+      isNull,
+    );
+  });
+
+  testWidgets('BabyShopHub starts with its animated logo intro', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BabyShopHubApp());
 
     expect(find.byType(StartupSequence), findsOneWidget);
     expect(find.byType(LogoIntroPage), findsOneWidget);
   });
 
-  testWidgets('Order confirmation renders its artwork, summary and actions',
-      (tester) async {
+  testWidgets('Order confirmation renders its artwork, summary and actions', (
+    tester,
+  ) async {
     const order = OrderModel(
       id: 42,
       status: 'CONFIRMED',
@@ -26,9 +52,9 @@ void main() {
       items: [],
     );
 
-    await tester.pumpWidget(const MaterialApp(
-      home: OrderSuccessScreen(order: order),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(home: OrderSuccessScreen(order: order)),
+    );
 
     // The parcel/check illustration must be present (not the old plain icon).
     expect(find.byType(OrderSuccessArtwork), findsOneWidget);
@@ -36,7 +62,10 @@ void main() {
 
     // Copy and the two actions still render, unchanged.
     expect(find.text('Order Placed!'), findsOneWidget);
-    expect(find.text('Your order has been successfully placed.'), findsOneWidget);
+    expect(
+      find.text('Your order has been successfully placed.'),
+      findsOneWidget,
+    );
     expect(find.text('View Order Details'), findsOneWidget);
     expect(find.text('Continue Shopping'), findsOneWidget);
     expect(find.text('Estimated Delivery'), findsOneWidget);
@@ -44,9 +73,7 @@ void main() {
 
   testWidgets('Home header shows the brand logo and the promo banner uses '
       'the baby_b image', (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: HomeScreen()),
-    ));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: HomeScreen())));
     // The screen loads its data before the header/banner appear, so let the
     // pending futures settle before asserting.
     await tester.pumpAndSettle();

@@ -9,7 +9,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_config.dart';
 import 'http_factory.dart';
-import 'mock_backend.dart';
 
 class ApiException implements Exception {
   ApiException(this.message, [this.statusCode]);
@@ -29,7 +28,7 @@ class ApiClient {
 
   final http.Client _client = createClient();
 
-  /// Mock mode: a fake JWT. Real backend: the JSESSIONID session cookie.
+  /// Holds the real backend's JSESSIONID cookie on native platforms.
   String? _token;
   String? get token => _token;
 
@@ -60,9 +59,7 @@ class ApiClient {
       if (json) 'Content-Type': 'application/json',
     };
     if (_token != null) {
-      if (useMock) {
-        h['Authorization'] = 'Bearer $_token';
-      } else if (!kIsWeb) {
+      if (!kIsWeb) {
         h['Cookie'] = _token!; // phones send the saved session cookie
       }
       // In a browser the cookie is sent automatically.
@@ -70,37 +67,42 @@ class ApiClient {
     return h;
   }
 
-  Uri _uri(String path, [Map<String, String>? query]) =>
-      Uri.parse('$apiBaseUrl$path')
-          .replace(queryParameters: query == null || query.isEmpty ? null : query);
+  Uri _uri(String path, [Map<String, String>? query]) => Uri.parse(
+    '$apiBaseUrl$path',
+  ).replace(queryParameters: query == null || query.isEmpty ? null : query);
 
   Future<dynamic> get(String path, {Map<String, String>? query}) {
-    if (useMock) {
-      return MockBackend.instance.handle('GET', path, query: query);
-    }
     return _send(() => _client.get(_uri(path, query), headers: _headers()));
   }
 
   Future<dynamic> post(String path, [Object? body]) {
-    if (useMock) return MockBackend.instance.handle('POST', path, body: body);
-    return _send(() => _client.post(_uri(path),
-        headers: _headers(), body: body == null ? null : jsonEncode(body)));
+    return _send(
+      () => _client.post(
+        _uri(path),
+        headers: _headers(),
+        body: body == null ? null : jsonEncode(body),
+      ),
+    );
   }
 
   Future<dynamic> put(String path, Object body) {
-    if (useMock) return MockBackend.instance.handle('PUT', path, body: body);
-    return _send(() =>
-        _client.put(_uri(path), headers: _headers(), body: jsonEncode(body)));
+    return _send(
+      () =>
+          _client.put(_uri(path), headers: _headers(), body: jsonEncode(body)),
+    );
   }
 
   Future<dynamic> patch(String path, Object body) {
-    if (useMock) return MockBackend.instance.handle('PATCH', path, body: body);
-    return _send(() =>
-        _client.patch(_uri(path), headers: _headers(), body: jsonEncode(body)));
+    return _send(
+      () => _client.patch(
+        _uri(path),
+        headers: _headers(),
+        body: jsonEncode(body),
+      ),
+    );
   }
 
   Future<dynamic> delete(String path) {
-    if (useMock) return MockBackend.instance.handle('DELETE', path);
     return _send(() => _client.delete(_uri(path), headers: _headers()));
   }
 
@@ -109,27 +111,24 @@ class ApiClient {
   Future<dynamic> postMultipart(
     String path, {
     required Map<String, String> fields,
+    Map<String, String>? query,
     required String partName,
     required Map<String, dynamic> partJson,
     Uint8List? fileBytes,
     String? fileName,
   }) {
-    if (useMock) {
-      return MockBackend.instance.handle('POST', path, body: {
-        ...partJson,
-        for (final e in fields.entries) e.key: int.tryParse(e.value) ?? e.value,
-      });
-    }
     return _send(() async {
-      final request = http.MultipartRequest('POST', _uri(path))
+      final request = http.MultipartRequest('POST', _uri(path, query))
         ..headers.addAll(_headers(json: false))
         ..fields.addAll(fields)
-        ..files.add(http.MultipartFile.fromString(
-          partName,
-          jsonEncode(partJson),
-          filename: '$partName.json',
-          contentType: MediaType('application', 'json'),
-        ));
+        ..files.add(
+          http.MultipartFile.fromString(
+            partName,
+            jsonEncode(partJson),
+            filename: '$partName.json',
+            contentType: MediaType('application', 'json'),
+          ),
+        );
       if (fileBytes != null) {
         request.files.add(_imagePart(fileBytes, fileName));
       }
@@ -138,21 +137,28 @@ class ApiClient {
   }
 
   /// Uploads one picture, e.g. to replace a product's image.
-  Future<dynamic> uploadFile(String path,
-      {required Uint8List bytes, required String fileName}) {
-    if (useMock) return Future.value(null);
+  Future<dynamic> uploadFile(
+    String path, {
+    required Uint8List bytes,
+    required String fileName,
+    String fieldName = 'image',
+  }) {
     return _send(() async {
       final request = http.MultipartRequest('POST', _uri(path))
         ..headers.addAll(_headers(json: false))
-        ..files.add(_imagePart(bytes, fileName));
+        ..files.add(_imagePart(bytes, fileName, fieldName: fieldName));
       return http.Response.fromStream(await _client.send(request));
     });
   }
 
-  http.MultipartFile _imagePart(Uint8List bytes, String? name) {
+  http.MultipartFile _imagePart(
+    Uint8List bytes,
+    String? name, {
+    String fieldName = 'image',
+  }) {
     final isPng = bytes.length > 3 && bytes[0] == 0x89 && bytes[1] == 0x50;
     return http.MultipartFile.fromBytes(
-      'image',
+      fieldName,
       bytes,
       filename: name ?? (isPng ? 'image.png' : 'image.jpg'),
       contentType: MediaType('image', isPng ? 'png' : 'jpeg'),
@@ -170,13 +176,14 @@ class ApiClient {
       throw ApiException('The server took too long to respond. Try again.');
     } catch (_) {
       throw ApiException(
-          "Can't reach the server. Check your connection and that the backend is running.");
+        "Can't reach the server. Check your connection and that the backend is running.",
+      );
     }
     _handle(res); // throws a readable error when the login failed
     if (kIsWeb) return 'browser-session'; // the browser keeps the cookie
-    final cookie = RegExp(r'JSESSIONID=[^;,\s]+')
-        .firstMatch(res.headers['set-cookie'] ?? '')
-        ?.group(0);
+    final cookie = RegExp(
+      r'JSESSIONID=[^;,\s]+',
+    ).firstMatch(res.headers['set-cookie'] ?? '')?.group(0);
     if (cookie == null) {
       throw ApiException('Login worked but the server sent no session.');
     }
@@ -193,7 +200,8 @@ class ApiClient {
       throw ApiException('The server took too long to respond. Try again.');
     } catch (_) {
       throw ApiException(
-          "Can't reach the server. Check your connection and that the backend is running.");
+        "Can't reach the server. Check your connection and that the backend is running.",
+      );
     }
   }
 
@@ -219,8 +227,8 @@ class ApiClient {
         message = body;
       }
     }
-    final expired = res.statusCode == 401 ||
-        (res.statusCode == 403 && !useMock && !suppressExpiry);
+    final expired =
+        res.statusCode == 401 || (res.statusCode == 403 && !suppressExpiry);
     if (expired && _token != null) {
       onUnauthorized?.call();
       message = 'Your session expired. Please log in again.';
